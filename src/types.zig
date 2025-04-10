@@ -11,6 +11,10 @@ pub fn isNumber(v: anytype) bool {
     const T = comptime @TypeOf(v);
     return isNumberType(T);
 }
+pub fn assertIsNumberType(comptime T: type) void {
+    comptime if (!isNumberType(T)) @compileError("Expected number, but found: " ++ @typeName(T));
+}
+
 pub fn isIntegerType(comptime T: type) bool {
     const Ti = @typeInfo(T);
     return Ti == .int;
@@ -19,6 +23,10 @@ pub fn isInteger(v: anytype) bool {
     const T = comptime @TypeOf(v);
     return isIntegerType(T);
 }
+pub fn assertIsIntegerType(comptime T: type) void {
+    comptime if (!isIntegerType(T)) @compileError("Expected integer, but found: " ++ @typeName(T));
+}
+
 pub fn isUnsignedIntegerType(comptime T: type) bool {
     const Ti = @typeInfo(T);
     return Ti == .int and Ti.int.signedness == .unsigned;
@@ -26,6 +34,10 @@ pub fn isUnsignedIntegerType(comptime T: type) bool {
 pub fn isUnsignedInteger(v: anytype) bool {
     return isUnsignedIntegerType(@TypeOf(v));
 }
+pub fn assertIsUnsignedIntegerType(comptime T: type) void {
+    comptime if (!isUnsignedIntegerType(T)) @compileError("Expected unsigned integer, but found: " ++ @typeName(T));
+}
+
 pub fn isSignedIntegerType(comptime T: type) bool {
     const Ti = @typeInfo(T);
     return Ti == .int and Ti.int.signedness == .signed;
@@ -34,6 +46,10 @@ pub fn isSignedInteger(v: anytype) bool {
     const T = comptime @TypeOf(v);
     return isSignedIntegerType(T);
 }
+pub fn assertIsSignedIntegerType(comptime T: type) void {
+    comptime if (!isSignedIntegerType(T)) @compileError("Expected signed integer, but found: " ++ @typeName(T));
+}
+
 pub fn isFloatType(comptime T: type) bool {
     const Ti = @typeInfo(T);
     return Ti == .float;
@@ -41,4 +57,42 @@ pub fn isFloatType(comptime T: type) bool {
 pub fn isFloat(v: anytype) bool {
     const T = comptime @TypeOf(v);
     return isSignedIntegerType(T);
+}
+pub fn assertIsFloatType(comptime T: type) void {
+    comptime if (!isFloatType(T)) @compileError("Expected floating point, but found: " ++ @typeName(T));
+}
+
+pub fn isVectorType(comptime T: type) bool {
+    return @typeInfo(T) == .vector;
+}
+pub fn isVector(v: anytype) bool {
+    const T: type = comptime @TypeOf(v);
+    return isVectorType(T);
+}
+pub fn assertIsVectorType(comptime T: type) void {
+   comptime if (!isVectorType(T)) @compileError("Expected vector, but found: " ++ @typeName(T)); 
+}
+
+pub fn isIntegerVectorType(comptime T: type) bool {
+    const Ti: std.builtin.Type = @typeInfo(T);
+    return Ti == .vector and isIntegerType(Ti.vector.child);
+}
+pub fn isIntegerVector(v: anytype) bool {
+    const T: type = comptime @TypeOf(v);
+    return isIntegerVectorType(T);
+}
+pub fn assertIsIntegerVectorType(comptime T: type) void {
+   comptime if (!isIntegerVectorType(T)) @compileError("Expected integer vector, but found: " ++ @typeName(T)); 
+}
+
+pub fn isFloatVectorType(comptime T: type) bool {
+    const Ti: std.builtin.Type = @typeInfo(T);
+    return Ti == .vector and isFloatType(Ti.vector.child);
+}
+pub fn isFloatVector(v: anytype) bool {
+    const T: type = comptime @TypeOf(v);
+    return isFloatVectorType(T);
+}
+pub fn assertIsFloatVectorType(comptime T: type) void {
+   comptime if (!isFloatVectorType(T)) @compileError("Expected floation point vector, but found: " ++ @typeName(T)); 
 }

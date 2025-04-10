@@ -3,6 +3,7 @@ const std = @import("std");
 
 fn copyBytes_generic(noalias dst: []u8, noalias src: []const u8) void {
     std.debug.assert(dst.len >= src.len);
+    for (dst[0..src.len], src) |*d, s| d.* = s;
 }
 
 fn copyBytes_x86_64(noalias dst: []u8, noalias src: []const u8) void {
@@ -16,7 +17,7 @@ const copyBytes: @TypeOf(copyBytes_generic) = switch (builtin.cpu.arch) {
     else => copyBytes_generic,
 };
 
-/// Copies all of src into dst. Does not follow pointers
+/// Copies all of src into dst starting at index 0
 pub fn copy(comptime T: type, noalias dst: []T, noalias src: []const T) void {
     std.debug.assert(dst.len >= src.len);
 
@@ -25,7 +26,29 @@ pub fn copy(comptime T: type, noalias dst: []T, noalias src: []const T) void {
     copyBytes(dst_u8, src_u8);
 }
 
-test "copyBytes" {
+/// Constant time keybased byte swap
+pub fn ctswap(comptime Tk: type, k: Tk, a: []u8, b: []u8) void {
+    comptime if (!@import("types.zig").isUnsignedIntegerType(Tk)) @compileError("Key must be an unsigned integer type");
+    const bitsize = comptime @bitSizeOf(Tk);
+    std.debug.assert(a.len == bitsize);
+    std.debug.assert(b.len == bitsize);
+
+    var ktemp: Tk = k;
+    for (0..bitsize) |i| {
+        const bit: u1 = @truncate(ktemp & 1);
+        const inv: u1 = ~bit;
+
+        const atemp = a[i];
+        const btemp = b[i];
+
+        a[i] = (btemp * bit) + (atemp * inv);
+        b[i] = (atemp * bit) + (btemp * inv);
+
+        ktemp = ktemp >> 1;
+    }
+}
+
+test "copy" {
     const prng: type = std.Random.DefaultPrng;
     const allocator = std.testing.allocator;
     const page_size = std.heap.pageSize();
