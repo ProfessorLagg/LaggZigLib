@@ -238,14 +238,12 @@ pub fn Vec2D(comptime T: type) type {
             try std.testing.expectEqual((comptime TObj{ .x = -1, .y = 1 }), m7.obj);
             try std.testing.expectEqual((comptime TObj{ .x = -1, .y = -1 }), m8.obj);
         }
-        // test "magnitude" {
-        //     @setFloatMode(.optimized);
-        //     @setRuntimeSafety(false);
-        //     const v: vectors.Vec2 = vectors.Vec2{ 3, 4 };
-        //     const m: f32 = vectors.Math2D.magnitude(v);
-
-        //     try std.testing.expectEqual(5, m);
-        // }
+        test "magnitude" {
+            @setFloatMode(.optimized);
+            const v: TSelf = .{ .vec = .{ 3.0, 4.0 } };
+            const m: T = v.magnitude();
+            try std.testing.expectEqual(5.0, m);
+        }
         // test "normalize" {
         //     @setFloatMode(.optimized);
         //     @setRuntimeSafety(false);
