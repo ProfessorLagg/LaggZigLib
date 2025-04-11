@@ -43,7 +43,7 @@ pub fn Vec2D(comptime T: type) type {
             @setFloatMode(.optimized);
             const m: T = magnitude(v);
             const vm: TVec = @splat(m);
-            const result: TVec = v / vm;
+            const result: TVec = v.vec / vm;
             const isNormal: bool = std.math.isNormal(m);
             const pred: @Vector(2, bool) = @splat(isNormal);
             const rvec: TVec = @select(T, pred, result, (comptime TVec{ 0, 0 }));
@@ -53,7 +53,7 @@ pub fn Vec2D(comptime T: type) type {
         pub inline fn lerp(x: TSelf, y: TSelf, t: TSelf) TSelf {
             @setFloatMode(.optimized);
             const d: TVec = y.vec - x.vec;
-            return TSelf{ .vec = @mulAdd(TVec, d, t, x) };
+            return TSelf{ .vec = @mulAdd(TVec, d, t.vec, x.vec) };
         }
         /// Returns the square of the euclidian distance between 2 points
         pub inline fn distanceSquared(a: TSelf, b: TSelf) T {
@@ -70,10 +70,8 @@ pub fn Vec2D(comptime T: type) type {
         /// Returns a direction vector going from a to b with a length of 1
         pub inline fn direction(from: TSelf, to: TSelf) TSelf {
             @setFloatMode(.optimized);
-
-            const v_diff: TVec = to.vec - from.vec;
-            const v_diff_normalized: TVec = normalize(v_diff);
-            return TSelf{ .vec = v_diff_normalized };
+            const v_diff: TSelf = @bitCast(to.vec - from.vec);
+            return v_diff.normalize();
         }
         /// Returns the sum of xy
         pub inline fn sum(v: TSelf) T {
@@ -141,7 +139,7 @@ pub fn Vec2D(comptime T: type) type {
         }
         test "map" {
             @setFloatMode(.optimized);
-            @setRuntimeSafety(false);
+
             // Arrange
             const v0: TSelf = TSelf{ .vec = .{ 0, 0 } };
             const v1: TSelf = TSelf{ .vec = .{ 0, 123 } };
@@ -191,7 +189,7 @@ pub fn Vec2D(comptime T: type) type {
         }
         test "clamp" {
             @setFloatMode(.optimized);
-            @setRuntimeSafety(false);
+
             // Arrange
             const v0: TSelf = .{ .vec = .{ 0, 0 } };
             const v1: TSelf = .{ .vec = .{ 0, 123 } };
@@ -244,102 +242,109 @@ pub fn Vec2D(comptime T: type) type {
             const m: T = v.magnitude();
             try std.testing.expectEqual(5.0, m);
         }
-        // test "normalize" {
-        //     @setFloatMode(.optimized);
-        //     @setRuntimeSafety(false);
-        //     // Arrange
-        //     const v0: vectors.Vec2 = vectors.Vec2{ 5, 5 };
-        //     const v1: vectors.Vec2 = vectors.Vec2{ 5, -5 };
-        //     const v2: vectors.Vec2 = vectors.Vec2{ -5, 5 };
-        //     const v3: vectors.Vec2 = vectors.Vec2{ -5, -5 };
+        test "normalize" {
+            @setFloatMode(.optimized);
+            // Arrange
+            const v0: TSelf = .{ .vec = .{ 5, 5 } };
+            const v1: TSelf = .{ .vec = .{ 5, -5 } };
+            const v2: TSelf = .{ .vec = .{ -5, 5 } };
+            const v3: TSelf = .{ .vec = .{ -5, -5 } };
 
-        //     // Act
-        //     const n0: vectors.Vec2 = vectors.Math2D.normalize(v0);
-        //     const n1: vectors.Vec2 = vectors.Math2D.normalize(v1);
-        //     const n2: vectors.Vec2 = vectors.Math2D.normalize(v2);
-        //     const n3: vectors.Vec2 = vectors.Math2D.normalize(v3);
+            // Act
+            const n0: TSelf = v0.normalize();
+            const n1: TSelf = v1.normalize();
+            const n2: TSelf = v2.normalize();
+            const n3: TSelf = v3.normalize();
 
-        //     // Assert
-        //     // TODO Find a proper way to round this to a number of decimal places
-        //     try std.testing.expectEqual(1.0, @round(vectors.Math2D.magnitude(n0)));
-        //     try std.testing.expectEqual(1.0, @round(vectors.Math2D.magnitude(n1)));
-        //     try std.testing.expectEqual(1.0, @round(vectors.Math2D.magnitude(n2)));
-        //     try std.testing.expectEqual(1.0, @round(vectors.Math2D.magnitude(n3)));
-        // }
-        // test "lerp" {
-        //     @setFloatMode(.optimized);
-        //     @setRuntimeSafety(false);
-        //     // Arrange
-        //     const len: comptime_int = 10;
-        //     const v0: vectors.Vec2 = vectors.Vec2{ 11.0, 19.0 };
-        //     const v1: vectors.Vec2 = vectors.Vec2{ 89.0, 97.0 };
-        //     // Act
-        //     var testVals: [len]vectors.Vec2 = undefined;
-        //     var trueVals: [len]vectors.Vec2 = undefined;
-        //     for (0..len) |i| {
-        //         const t_f32: f32 = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(len));
-        //         const t_vec: vectors.Vec2 = vectors.Vec2{ t_f32, t_f32 };
-        //         testVals[i] = vectors.Math2D.lerp(v0, v1, t_vec);
-        //         trueVals[i] = std.math.lerp(v0, v1, t_vec);
-        //     }
+            // Assert
+            // TODO Find a proper way to round this to a number of decimal places
+            try std.testing.expectEqual(1.0, @round(n0.magnitude()));
+            try std.testing.expectEqual(1.0, @round(n1.magnitude()));
+            try std.testing.expectEqual(1.0, @round(n2.magnitude()));
+            try std.testing.expectEqual(1.0, @round(n3.magnitude()));
+        }
+        test "lerp" {
+            @setFloatMode(.optimized);
+            // Arrange
+            const len: comptime_int = 10;
+            const v0: TSelf = .{ .vec = .{ 11.0, 19.0 } };
+            const v1: TSelf = .{ .vec = .{ 89.0, 97.0 } };
+            // Act
+            var testVals: [len]TSelf = undefined;
+            var trueVals: [len]TVec = undefined;
+            for (0..len) |i| {
+                const t_f: T = @as(T, @floatFromInt(i)) / @as(T, @floatFromInt(len));
+                const t_v: TSelf = .{ .vec = .{ t_f, t_f } };
+                testVals[i] = lerp(v0, v1, t_v);
+                trueVals[i] = std.math.lerp(v0.vec, v1.vec, t_v.vec);
+            }
 
-        //     // Assert
-        //     for (0..len) |i| {
-        //         try std.testing.expectEqual(trueVals[i], testVals[i]);
-        //     }
-        // }
-        // test "distanceSquared" {
-        //     @setFloatMode(.optimized);
-        //     @setRuntimeSafety(false);
-        //     // Arrange
-        //     const v0: vectors.Vec2 = vectors.Vec2{ 0, 0 };
-        //     const v1: vectors.Vec2 = vectors.Vec2{ 3, 4 };
+            // Assert
+            for (0..len) |i| {
+                try std.testing.expectEqual(trueVals[i], testVals[i].vec);
+            }
+        }
+        test "distanceSquared" {
+            @setFloatMode(.optimized);
+            // Arrange
+            const v0: TSelf = .{ .vec = .{ 0, 0 } };
+            const v1: TSelf = .{ .vec = .{ 3, 4 } };
 
-        //     // Act
-        //     const d: f32 = vectors.Math2D.distanceSquared(v0, v1);
+            // Act
+            const d: T = v0.distanceSquared(v1);
 
-        //     // Assert
-        //     try std.testing.expectEqual(25.0, d);
-        // }
-        // test "distance" {
-        //     @setFloatMode(.optimized);
-        //     @setRuntimeSafety(false);
-        //     // Arrange
-        //     const v0: vectors.Vec2 = vectors.Vec2{ 0, 0 };
-        //     const v1: vectors.Vec2 = vectors.Vec2{ 3, 4 };
+            // Assert
+            try std.testing.expectEqual(25.0, d);
+        }
+        test "distance" {
+            @setFloatMode(.optimized);
 
-        //     // Act
-        //     const d: f32 = vectors.Math2D.distance(v0, v1);
+            // Arrange
+            const v0: TSelf = .{ .vec = .{ 0, 0 } };
+            const v1: TSelf = .{ .vec = .{ 3, 4 } };
 
-        //     // Assert
-        //     try std.testing.expectEqual(5.0, d);
-        // }
-        // test "direction" {
-        //     @setFloatMode(.optimized);
-        //     @setRuntimeSafety(false);
-        //     // Arrange
-        //     const v0: vectors.Vec2 = vectors.Vec2{ 0.0, 0.0 };
-        //     const v1: vectors.Vec2 = vectors.Vec2{ 3.0, 4.0 };
-        //     const v2: vectors.Vec2 = vectors.Vec2{ -3.0, 4.0 };
-        //     const v3: vectors.Vec2 = vectors.Vec2{ -3.0, -4.0 };
-        //     const v4: vectors.Vec2 = vectors.Vec2{ 3.0, -4.0 };
+            // Act
+            const d: f32 = v0.distance(v1);
 
-        //     // Act
-        //     const a01: vectors.Vec2 = vectors.Math2D.direction(v0, v1);
-        //     const a02: vectors.Vec2 = vectors.Math2D.direction(v0, v2);
-        //     const a03: vectors.Vec2 = vectors.Math2D.direction(v0, v3);
-        //     const a04: vectors.Vec2 = vectors.Math2D.direction(v0, v4);
-        //     // Assert
-        //     try std.testing.expectEqual(comptime @sqrt(vectors.Vec2{ 2, 2 }) / vectors.Vec2{ 2, 2 }, vectors.Math2D.direction(v0, vectors.Vec2{ 1, 1 }));
-        //     try std.testing.expectEqual(vectors.Vec2{ 1, 1 }, vectors.Math2D.sign(a01));
-        //     try std.testing.expectEqual(vectors.Vec2{ -1, 1 }, vectors.Math2D.sign(a02));
-        //     try std.testing.expectEqual(vectors.Vec2{ -1, -1 }, vectors.Math2D.sign(a03));
-        //     try std.testing.expectEqual(vectors.Vec2{ 1, -1 }, vectors.Math2D.sign(a04));
-        //     try std.testing.expectEqual(1.0, vectors.Math2D.magnitude(a01));
-        //     try std.testing.expectEqual(1.0, vectors.Math2D.magnitude(a02));
-        //     try std.testing.expectEqual(1.0, vectors.Math2D.magnitude(a03));
-        //     try std.testing.expectEqual(1.0, vectors.Math2D.magnitude(a04));
-        // }
+            // Assert
+            try std.testing.expectEqual(5.0, d);
+        }
+        test "direction" {
+            @setFloatMode(.optimized);
+
+            // Arrange
+            const v0: TSelf = .{ .vec = .{ 0.0, 0.0 } };
+            const v1: TSelf = .{ .vec = .{ 3.0, 4.0 } };
+            const v2: TSelf = .{ .vec = .{ -3.0, 4.0 } };
+            const v3: TSelf = .{ .vec = .{ -3.0, -4.0 } };
+            const v4: TSelf = .{ .vec = .{ 3.0, -4.0 } };
+
+            // Act
+            const a01: TSelf = v0.direction(v1);
+            const a02: TSelf = v0.direction(v2);
+            const a03: TSelf = v0.direction(v3);
+            const a04: TSelf = v0.direction(v4);
+            const s01: TSelf = a01.sign();
+            const s02: TSelf = a02.sign();
+            const s03: TSelf = a03.sign();
+            const s04: TSelf = a04.sign();
+
+            // Assert
+            try std.testing.expectEqual(TVec{ 1, 1 }, s01.vec);
+            try std.testing.expectEqual(TVec{ -1, 1 }, s02.vec);
+            try std.testing.expectEqual(TVec{ -1, -1 }, s03.vec);
+            try std.testing.expectEqual(TVec{ 1, -1 }, s04.vec);
+
+            try std.testing.expectEqual(TObj{ .x = 1, .y = 1 }, s01.obj);
+            try std.testing.expectEqual(TObj{ .x = -1, .y = 1 }, s02.obj);
+            try std.testing.expectEqual(TObj{ .x = -1, .y = -1 }, s03.obj);
+            try std.testing.expectEqual(TObj{ .x = 1, .y = -1 }, s04.obj);
+
+            try std.testing.expectEqual(1.0, a01.magnitude());
+            try std.testing.expectEqual(1.0, a02.magnitude());
+            try std.testing.expectEqual(1.0, a03.magnitude());
+            try std.testing.expectEqual(1.0, a04.magnitude());
+        }
     };
 }
 
@@ -348,11 +353,21 @@ pub fn Plane2D(comptime T: type) type {
     return @Vector(2, T);
 }
 
-test {
+test "f16" {
     _ = Vec2D(f16);
+}
+test "f32" {
     _ = Vec2D(f32);
+}
+test "f64" {
     _ = Vec2D(f64);
+}
+test "f80" {
     _ = Vec2D(f80);
+}
+test "f128" {
     _ = Vec2D(f128);
+}
+test "c_longdouble" {
     _ = Vec2D(c_longdouble);
 }
