@@ -5,8 +5,8 @@ pub fn Vec2D(comptime T: type) type {
     comptime types.assertIsFloatType(T);
     return packed union {
         const TSelf = @This();
-        const TVec = @Vector(2, T);
-        const TObj = packed struct { x: T, y: T };
+        pub const TVec = @Vector(2, T);
+        pub const TObj = packed struct { x: T, y: T };
         vec: TVec,
         obj: TObj,
 
@@ -348,26 +348,67 @@ pub fn Vec2D(comptime T: type) type {
     };
 }
 
-pub fn Plane2D(comptime T: type) type {
-    comptime types.assertIsFloatType(T);
-    return @Vector(2, T);
-}
-
-test "f16" {
+test "Vec2D.f16" {
     _ = Vec2D(f16);
 }
-test "f32" {
+test "Vec2D.f32" {
     _ = Vec2D(f32);
 }
-test "f64" {
+test "Vec2D.f64" {
     _ = Vec2D(f64);
 }
-test "f80" {
+test "Vec2D.f80" {
     _ = Vec2D(f80);
 }
-test "f128" {
+test "Vec2D.f128" {
     _ = Vec2D(f128);
 }
-test "c_longdouble" {
+test "Vec2D.c_longdouble" {
     _ = Vec2D(c_longdouble);
+}
+
+pub fn Plane2D(comptime T: type) type {
+    comptime types.assertIsFloatType(T);
+    return packed union {
+        const TSelf = @This();
+        /// Position of the top left corner
+        pos: Vec2D(T),
+        /// Width of the plane
+        width: T,
+        /// Height of the plane
+        height: T,
+
+        /// Returns the top left corner of the plane
+        pub inline fn cornerTL(plane: *const TSelf) Vec2D(T) {
+            return @bitCast(plane.obj.pos);
+        }
+        /// Returns the top right corner of the plane
+        pub inline fn cornerTR(plane: *const TSelf) Vec2D(T) {
+            var r: Vec2D(T) = plane.obj.pos;
+            r.obj.x += plane.obj.width;
+            return r;
+        }
+        /// Returns the bottom left corner of the plane
+        pub inline fn cornerBL(plane: *const TSelf) Vec2D(T) {
+            var r: Vec2D(T) = plane.obj.pos;
+            r.obj.x += plane.obj.width;
+            return r;
+        }
+        /// Returns the bottom right corner of the plane
+        pub inline fn cornerBR(plane: *const TSelf) Vec2D(T) {
+            return Vec2D(T){ .vec = plane.obj.pos + Vec2D(T).TVec{ plane.width, plane.height } };
+        }
+
+        /// Returns wether the given point is inside or outside the plane
+        pub fn contains(plane: *const TSelf, point: Vec2D(T)) bool {
+            const p: Vec2D(T).TVec = point.vec;
+            const tl: Vec2D(T).TVec = plane.cornerTL().vec;
+            const br: Vec2D(T).TVec = plane.cornerBR().vec;
+
+            const cmp_tl: @Vector(2, bool) = p >= tl;
+            const cmp_br: @Vector(2, bool) = p <= br;
+            const cmp: @Vector(2, bool) = cmp_tl and cmp_br;
+            return @reduce(.And, cmp);
+        }
+    };
 }
