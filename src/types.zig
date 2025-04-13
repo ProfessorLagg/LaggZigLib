@@ -70,7 +70,20 @@ pub fn isVector(v: anytype) bool {
     return isVectorType(T);
 }
 pub fn assertIsVectorType(comptime T: type) void {
-   comptime if (!isVectorType(T)) @compileError("Expected vector, but found: " ++ @typeName(T)); 
+    comptime if (!isVectorType(T)) @compileError("Expected vector, but found: " ++ @typeName(T));
+}
+
+pub fn isNumberVectorType(comptime T: type) bool {
+    const Ti: std.builtin.Type = @typeInfo(T);
+    if (Ti != .vector) return false;
+    return isNumber(Ti.vector.child);
+}
+pub fn isNumberVector(v: anytype) bool {
+    const T: type = @TypeOf(v);
+    return isNumberType(T);
+}
+pub fn assertIsNumberVectorType(comptime T: type) void {
+    comptime if (!isNumberVectorType(T)) @compileError("Expected vector of numbers, but found: " ++ @typeName(T));
 }
 
 pub fn isIntegerVectorType(comptime T: type) bool {
@@ -82,7 +95,7 @@ pub fn isIntegerVector(v: anytype) bool {
     return isIntegerVectorType(T);
 }
 pub fn assertIsIntegerVectorType(comptime T: type) void {
-   comptime if (!isIntegerVectorType(T)) @compileError("Expected integer vector, but found: " ++ @typeName(T)); 
+    comptime if (!isIntegerVectorType(T)) @compileError("Expected integer vector, but found: " ++ @typeName(T));
 }
 
 pub fn isFloatVectorType(comptime T: type) bool {
@@ -94,5 +107,16 @@ pub fn isFloatVector(v: anytype) bool {
     return isFloatVectorType(T);
 }
 pub fn assertIsFloatVectorType(comptime T: type) void {
-   comptime if (!isFloatVectorType(T)) @compileError("Expected floation point vector, but found: " ++ @typeName(T)); 
+    comptime if (!isFloatVectorType(T)) @compileError("Expected vector of floats, but found: " ++ @typeName(T));
+}
+
+pub fn isNumberOrNumberVectorType(comptime T: type) bool {
+    return isNumberType(T) or isNumberVectorType(T);
+}
+pub fn isNumberOrNumberVector(v: anytype) bool {
+    const T: type = @TypeOf(v);
+    return isNumberOrNumberVectorType(T);
+}
+pub fn assertIsNumberOrNumberVectorType(comptime T: type) void {
+    comptime if (!isNumberOrNumberVector(T)) @compileError("Expected number or vector of numbers, but found: " ++ @typeName(T));
 }

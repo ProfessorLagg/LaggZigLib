@@ -24,7 +24,7 @@ pub fn Vec2D(comptime T: type) type {
         /// Maps a vector from 1 number range to another
         pub inline fn map(x: TSelf, input_start: TSelf, input_end: TSelf, output_start: TSelf, output_end: TSelf) TSelf {
             @setFloatMode(.optimized);
-            return TSelf{ .vec = @import("math.zig").map(TVec, x.vec, input_start.vec, input_end.vec, output_start.vec, output_end.vec) };
+            return TSelf{ .vec = (x.vec - input_start.vec) / (input_end.vec - input_start.vec) * (output_end.vec - output_start.vec) + output_start.vec };
         }
         /// Clamps the vector to a certain range
         pub inline fn clamp(v: TSelf, min: TSelf, max: TSelf) TSelf {

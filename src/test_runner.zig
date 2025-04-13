@@ -8,7 +8,12 @@ const ansi_text_pass = ansi_esc ++ "1;32m";
 pub fn main() !void {
     const out = std.io.getStdOut().writer();
 
+    var count_test: usize = 0;
+    var count_pass: usize = 0;
+    var count_fail: usize = 0;
+
     for (builtin.test_functions) |t| {
+        count_test += 1;
         t.func() catch |err| {
             const trace = @errorReturnTrace();
             if (trace != null) {
@@ -16,11 +21,16 @@ pub fn main() !void {
             } else {
                 try std.fmt.format(out, "{}\n{s}FAIL{s}\t{s}\n", .{ err, ansi_text_fail, ansi_text_reset, t.name });
             }
+            count_fail += 1;
 
             continue;
         };
         try std.fmt.format(out, "{s}PASS{s}\t{s}\n", .{ ansi_text_pass, ansi_text_reset, t.name });
+        count_pass += 1;
     }
+
+    try std.fmt.format(out, "\n=== SUMMARY ===\n", .{});
+    try std.fmt.format(out, "{s}PASSED{s}\t{d}/{d}\t|\t{s}FAILED{s}\t{d}/{d}\n", .{ ansi_text_pass, ansi_text_reset, count_pass, count_test, ansi_text_fail, ansi_text_reset, count_fail, count_test });
 }
 
 fn setCursorLineStart(writer: anytype) !void {
