@@ -30,7 +30,8 @@ pub fn main() !void {
     }
 
     try std.fmt.format(out, "\n=== SUMMARY ===\n", .{});
-    try std.fmt.format(out, "{s}PASSED{s}\t{d}/{d}\t|\t{s}FAILED{s}\t{d}/{d}\n", .{ ansi_text_pass, ansi_text_reset, count_pass, count_test, ansi_text_fail, ansi_text_reset, count_fail, count_test });
+    try std.fmt.format(out, "{s}PASSED{s}\t{d}/{d}\n", .{ ansi_text_pass, ansi_text_reset, count_pass, count_test });
+    if (count_fail > 0) try std.fmt.format(out, "{s}FAILED{s}\t{d}/{d}\n", .{ ansi_text_fail, ansi_text_reset, count_fail, count_test });
 }
 
 fn setCursorLineStart(writer: anytype) !void {
