@@ -1,6 +1,23 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
+pub fn allocPanic(allocator: std.mem.Allocator, comptime T: type, n: usize) []T {
+    return allocator.alloc(T, n) catch |err| {
+        std.debug.panic("Could not alloc due to error: {any} {any}", .{ err, @errorReturnTrace() });
+    };
+}
+
+pub fn clone(comptime T: type, allocator: std.mem.Allocator, a: []const T) ![]T {
+    const result: []T = try allocator.alloc(T, a.len);
+    copy(T, result, a);
+    return result;
+}
+pub fn clonePanic(comptime T: type, allocator: std.mem.Allocator, a: []const T) []T {
+    const result: []T = allocPanic(allocator, T, a.len);
+    copy(T, result, a);
+    return result;
+}
+
 fn copyBytes_generic(noalias dst: []u8, noalias src: []const u8) void {
     std.debug.assert(dst.len >= src.len);
     for (dst[0..src.len], src) |*d, s| d.* = s;
@@ -65,7 +82,7 @@ fn swapXorFn(comptime T: type, comptime castTo: type) (fn (comptime type, *T, *T
     return struct {
         pub fn swapXor(comptime T2: type, x: *T2, y: *T2) void {
             comptime if (T != T2) unreachable;
-            
+
             const a: *castTo = @ptrFromInt(@intFromPtr(x));
             const b: *castTo = @ptrFromInt(@intFromPtr(y));
             a.* = b.* ^ a.*;

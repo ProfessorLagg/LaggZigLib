@@ -1,5 +1,6 @@
 const std = @import("std");
 const compare = @import("compare.zig");
+const math = @import("math.zig");
 const mem = @import("mem.zig");
 
 /// Contains sorting algorithms that do not require an allocator to be passed in
@@ -34,6 +35,9 @@ pub const inplace = struct {
             }
         }
     }
+    test "selectionSort" {
+        try testSortFn(selectionSort);
+    }
 
     pub fn insertionSort(comptime T: type, comptime comparison: compare.Comparison(T), a: []T) void {
         var i: usize = 1;
@@ -56,6 +60,9 @@ pub const inplace = struct {
             }
             a[j] = x;
         }
+    }
+    test "insertionSort" {
+        try testSortFn(insertionSort);
     }
 
     pub fn bubbleSort(comptime T: type, comptime comparison: compare.Comparison(T), a: []T) void {
@@ -84,6 +91,9 @@ pub const inplace = struct {
             n = next_n;
         }
     }
+    test "bubbleSort" {
+        try testSortFn(bubbleSort);
+    }
 
     pub fn noSort(comptime T: type, comptime comparison: compare.Comparison(T), a: []T) void {
         _ = &comparison;
@@ -92,38 +102,76 @@ pub const inplace = struct {
     inline fn testSortFn(comptime sortFn: @TypeOf(noSort)) !void {
         const len: comptime_int = 11; //101;
         const cmpFn: compare.Comparison(u8) = compare.compareNumberFn(u8);
-        var nums: [len]u8 = undefined;
+        const nums: []u8 = try std.testing.allocator.alloc(u8, len);
+        defer std.testing.allocator.free(nums);
         var prng = std.Random.DefaultPrng.init(std.testing.random_seed);
         prng.fill(nums[0..]);
 
-        // std.log.warn("pre-sort:\t{any}", .{nums});
+        const preSum = math.sum(u8, nums[0..]);
         sortFn(u8, cmpFn, nums[0..]);
-        // std.log.warn("post-sort:\t{any}", .{nums});
+        const postSum = math.sum(u8, nums[0..]);
+
+        std.testing.expectEqual(preSum, postSum) catch |err| {
+            std.log.err("Sorting algorithm changed the array data", .{});
+            return err;
+        };
 
         for (1..nums.len) |i| {
             const c = cmpFn(nums[i - 1], nums[i]);
             std.testing.expect(c != .greater) catch |err| {
-                std.log.err("found non-sorted numbers: a[{d}] ({d}) > a[{d}] ({d})", .{ i - 1, nums[i - 1], i, nums[i] });
+                std.log.err("found non-sorted numbers: a[{d}]:{d} > a[{d}]:{d}\nin {any}", .{ i - 1, nums[i - 1], i, nums[i], nums });
                 return err;
             };
         }
-    }
-
-    test "selection_sort" {
-        try testSortFn(selectionSort);
-    }
-    test "insertion_sort" {
-        try testSortFn(insertionSort);
-    }
-    test "bubble_sort" {
-        try testSortFn(bubbleSort);
     }
 };
 
 /// Contains sorting algorithms that require an allocator to be passed in
 pub const alloc = struct {
-    
-    
+    fn MergeSortContext(comptime T: type, comptime comparison: compare.Comparison(T)) type {
+        return struct {
+            fn _topDownMergeSort(A: []T, B: []T) void {
+                std.debug.assert(A.len == B.len);
+                mem.copy(T, B, A);
+                _topDownSplitMerge(A, 0, A.len, B);
+            }
+            fn _topDownSplitMerge(B: []T, iBegin: usize, iEnd: usize, A: []T) void {
+                if (iEnd - iBegin <= 1) return;
+
+                const iMiddle = (iEnd + iBegin) / 2;
+                _topDownSplitMerge(A, iBegin, iMiddle, B);
+                _topDownSplitMerge(A, iMiddle, iEnd, B);
+                _topDownMerge(B, iBegin, iMiddle, iEnd, A);
+            }
+            fn _topDownMerge(B: []T, iBegin: usize, iMiddle: usize, iEnd: usize, A: []T) void {
+                if (@inComptime()) @panic("Function should not be run in comptime");
+                var i: usize = iBegin;
+                var j: usize = iMiddle;
+
+                var k: usize = iBegin;
+                while (k < iEnd - 1) : (k += 1) {
+                    const cmp = comparison(A[i], A[j]);
+                    if (i < iMiddle and (j >= iEnd or cmp.lessOrEqualTo())) {
+                        B[k] = A[i];
+                        i += 1;
+                    } else {
+                        B[k] = A[j];
+                        j += 1;
+                    }
+                }
+            }
+        };
+    }
+    pub fn mergeSort(comptime T: type, comptime comparison: compare.Comparison(T), allocator: std.mem.Allocator, a: []T) void {
+        const b: []T = mem.allocPanic(allocator, T, a.len);
+        defer allocator.free(b);
+
+        MergeSortContext(T, comparison)._topDownMergeSort(a, b);
+    }
+    test "mergeSort" {
+        try testSortFn(mergeSort);
+    }
+
     pub fn noSort(comptime T: type, comptime comparison: compare.Comparison(T), allocator: std.mem.Allocator, a: []T) void {
         _ = &comparison;
         _ = &allocator;
@@ -132,18 +180,25 @@ pub const alloc = struct {
     inline fn testSortFn(comptime sortFn: @TypeOf(noSort)) !void {
         const len: comptime_int = 11; //101;
         const cmpFn: compare.Comparison(u8) = compare.compareNumberFn(u8);
-        var nums: [len]u8 = undefined;
+        const nums: []u8 = try std.testing.allocator.alloc(u8, len);
+        defer std.testing.allocator.free(nums);
         var prng = std.Random.DefaultPrng.init(std.testing.random_seed);
         prng.fill(nums[0..]);
 
-        // std.log.warn("pre-sort:\t{any}", .{nums});
+        const preClone: []const u8 = try mem.clone(u8, std.testing.allocator, nums);
+        const preSum = math.sum(u8, nums[0..]);
         sortFn(u8, cmpFn, std.testing.allocator, nums[0..]);
-        // std.log.warn("post-sort:\t{any}", .{nums});
+        const postSum = math.sum(u8, nums[0..]);
+
+        std.testing.expectEqual(preSum, postSum) catch |err| {
+            std.log.err("Sorting algorithm changed the array data:\n pre sort:  {any}\n post sort: {any}", .{ preClone, nums });
+            return err;
+        };
 
         for (1..nums.len) |i| {
             const c = cmpFn(nums[i - 1], nums[i]);
             std.testing.expect(c != .greater) catch |err| {
-                std.log.err("found non-sorted numbers: a[{d}] ({d}) > a[{d}] ({d})", .{ i - 1, nums[i - 1], i, nums[i] });
+                std.log.err("found non-sorted numbers: a[{d}]:{d} > a[{d}]:{d}\nin {any}", .{ i - 1, nums[i - 1], i, nums[i], nums });
                 return err;
             };
         }
@@ -152,4 +207,7 @@ pub const alloc = struct {
 
 test "inplace" {
     _ = inplace;
+}
+test "alloc" {
+    _ = alloc;
 }

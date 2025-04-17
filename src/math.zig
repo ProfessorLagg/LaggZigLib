@@ -35,6 +35,45 @@ pub fn map(comptime T: type, x: T, input_start: T, input_end: T, output_start: T
     return @call(.always_inline, mapfn, .{ T, x, input_start, input_end, output_start, output_end });
 }
 
+inline fn sumIntFn(comptime T: type) (fn ([]const T) T) {
+    comptime {
+        return struct {
+            pub fn f(a: []const T) T {
+                // TODO Vectorize this
+                var r: T = 0;
+                for (0..a.len) |i| {
+                    r +%= a[i];
+                }
+                return r;
+            }
+        }.f;
+    }
+}
+inline fn sumFloatFn(comptime T: type) (fn ([]const T) T) {
+    comptime types.assertIsFloatType(T);
+    return struct {
+        pub fn f(a: []const T) T {
+            @setFloatMode(.optimized);
+            // TODO Vectorize this
+            var r: T = 0;
+            for (0..a.len) |i| {
+                r += a[i];
+            }
+            return r;
+        }
+    }.f;
+}
+/// Sums an array of numbers. For integers, the result will wrap instead of overflow
+pub fn sum(comptime T: type, a: []const T) T {
+    const sumFn = comptime blk: {
+        types.assertIsNumberType(T);
+        if (types.isIntegerType(T)) break :blk sumIntFn(T);
+        if (types.isFloatType(T)) break :blk sumFloatFn(T);
+    };
+
+    return sumFn(a);
+}
+
 test "map" {
     // TODO
 }

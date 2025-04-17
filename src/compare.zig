@@ -1,7 +1,32 @@
 const std = @import("std");
 const types = @import("types.zig");
 
-pub const CompareResult = enum(i8) { less = -1, equal = 0, greater = 1 };
+pub const CompareResult = enum(i8) { // NO FOLD
+    less = -1,
+    equal = 0,
+    greater = 1,
+
+    /// a < b
+    pub inline fn lessThan(cmp: CompareResult) bool {
+        return cmp == .less;
+    }
+    /// a == b
+    pub inline fn equalTo(cmp: CompareResult) bool {
+        return cmp == .equal;
+    }
+    /// a > b
+    pub inline fn greaterThan(cmp: CompareResult) bool {
+        return cmp == .greater;
+    }
+    /// a <= b
+    pub inline fn lessOrEqualTo(cmp: CompareResult) bool {
+        return cmp != .greater;
+    }
+    /// a >= b
+    pub inline fn greaterOrEqualTo(cmp: CompareResult) bool {
+        return cmp != .less;
+    }
+};
 
 pub fn Comparison(comptime T: type) type {
     return fn (T, T) CompareResult;
@@ -37,7 +62,6 @@ pub fn compareNumberFn(comptime T: type) Comparison(T) {
         }
     }.cmp;
 }
-
 pub fn compareNumber(a: anytype, b: anytype) CompareResult {
     const T: type = comptime @TypeOf(a);
     comptime {
