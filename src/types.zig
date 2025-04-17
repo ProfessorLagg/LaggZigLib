@@ -1,5 +1,20 @@
 const std = @import("std");
 
+pub fn isPointerType(comptime T: type) bool {
+    const Ti = comptime @typeInfo(T);
+    return switch (Ti) {
+        .pointer => true,
+        else => false,
+    };
+}
+pub fn isPointer(v: anytype) bool {
+    const T = comptime @TypeOf(v);
+    return isPointerType(T);
+}
+pub fn assertIsPointerType(comptime T: type) void {
+    comptime if (!isPointerType(T)) @compileError("Expected pointer, but found: " ++ @typeName(T));
+}
+
 pub fn isNumberType(comptime T: type) bool {
     const Ti = comptime @typeInfo(T);
     return switch (Ti) {

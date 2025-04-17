@@ -1,10 +1,13 @@
+const std = @import("std");
 const types = @import("types.zig");
+const simd = @import("simd.zig");
 
+/// Checks if num is even without using %. Only works for unsigned integers
 pub fn isEven(comptime T: type, num: T) bool {
     comptime if (!@import("types.zig").isUnsignedIntegerType(T)) @compileError("Expected unsigned integer, but found " + @typeName(T));
     return (num & @as(T, 1)) == 0;
 }
-
+/// Checks if num is not even without using %. Only works for unsigned integers
 pub fn isUneven(comptime T: type, num: T) bool {
     comptime if (!@import("types.zig").isUnsignedIntegerType(T)) @compileError("Expected unsigned integer, but found " + @typeName(T));
     return (num & @as(T, 1)) == 1;
@@ -37,16 +40,32 @@ pub fn map(comptime T: type, x: T, input_start: T, input_end: T, output_start: T
 
 inline fn sumIntFn(comptime T: type) (fn ([]const T) T) {
     comptime {
-        return struct {
-            pub fn f(a: []const T) T {
-                // TODO Vectorize this
+        const sumFuncs = struct {
+            pub fn loop(a: []const T) T {
                 var r: T = 0;
                 for (0..a.len) |i| {
                     r +%= a[i];
                 }
                 return r;
             }
-        }.f;
+
+            pub fn vectorized(a: []const T) T {
+                var r: T = 0;
+                var iter = simd.VectorIterator(T).init(a);
+                iter.default_value = 0;
+                while (iter.next()) |vec| {
+                    r +%= @reduce(.Add, vec);
+                }
+                return r;
+            }
+        };
+
+        const vec_size: ?comptime_int = std.simd.suggestVectorLength(T);
+        if (vec_size == null) return sumFuncs.loop;
+        return switch (vec_size.?) {
+            0, 1, 2, 3 => sumFuncs.loop,
+            else => sumFuncs.vectorized,
+        };
     }
 }
 inline fn sumFloatFn(comptime T: type) (fn ([]const T) T) {

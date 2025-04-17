@@ -1,5 +1,6 @@
 const std = @import("std");
 const types = @import("types.zig");
+const math = @import("math.zig");
 
 pub const CompareResult = enum(i8) { // NO FOLD
     less = -1,

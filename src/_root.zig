@@ -10,6 +10,7 @@ pub const intrinsics = switch (builtin.cpu.arch) {
 pub const math = @import("math.zig");
 pub const math2D = @import("math2D.zig");
 pub const mem = @import("mem.zig");
+pub const simd = @import("simd.zig");
 pub const sorting = @import("sorting.zig");
 pub const types = @import("types.zig");
 
@@ -19,6 +20,7 @@ test {
     _ = math;
     _ = math2D;
     _ = mem;
+    _ = simd;
     _ = sorting;
     _ = types;
 }

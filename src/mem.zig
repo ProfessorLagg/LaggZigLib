@@ -1,6 +1,8 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
+const compare = @import("compare.zig");
+
 pub fn allocPanic(allocator: std.mem.Allocator, comptime T: type, n: usize) []T {
     return allocator.alloc(T, n) catch |err| {
         std.debug.panic("Could not alloc due to error: {any} {any}", .{ err, @errorReturnTrace() });
@@ -130,6 +132,37 @@ pub fn ctswap(comptime Tk: type, k: Tk, a: []u8, b: []u8) void {
 
         ktemp = ktemp >> 1;
     }
+}
+
+
+pub fn binarySearch(comptime T: type, comptime comparison: compare.Comparison(T), a: []const T, item: T) ?usize {
+    var L: usize = 0;
+    var R: usize = a.len - 1;
+    while (L <= R) {
+        const m: usize = @divFloor((L + R), 2);
+        const cmp = comparison(a[m], item);
+        switch (cmp) {
+            .less => L = m + 1,
+            .greater => R = m - 1,
+            .equal => return m,
+        }
+    }
+    return null;
+}
+
+pub fn binarySearchR(comptime T: type, comptime comparison: compare.ComparisonR(T), a: []const T, item: *const T) ?usize {
+    var L: usize = 0;
+    var R: usize = a.len - 1;
+    while (L <= R) {
+        const m: usize = @divFloor((L + R), 2);
+        const cmp = comparison(&a[m], &item);
+        switch (cmp) {
+            .less => L = m + 1,
+            .greater => R = m - 1,
+            .equal => return m,
+        }
+    }
+    return null;
 }
 
 test "copy" {
