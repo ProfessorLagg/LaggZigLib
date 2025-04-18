@@ -91,11 +91,9 @@ pub fn SortedArrayMapR(comptime Tkey: type, comptime Tval: type, comptime compar
                 self.insertAt(insertionIndex, k, v);
             }
         }
-
-        const UpdateFunc = fn (*Tval, *const Tval) void;
         /// If k is in the map, updates the value at k using updateFn.
         /// otherwise add the value from addFn to the map
-        pub fn addOrUpdate(self: *TSelf, k: *const Tkey, v: *const Tval, comptime updateFn: UpdateFunc) void {
+        pub fn addOrUpdate(self: *TSelf, k: *const Tkey, v: *const Tval, comptime updateFn: fn (*Tval, *const Tval) void) void {
             const s: u32 = self.getInsertOrUpdateIndex(k);
             const e: bool = (s & 0b10000000000000000000000000000000) > 0;
             const i: u32 = s & 0b01111111111111111111111111111111;
@@ -112,7 +110,7 @@ pub fn SortedArrayMapR(comptime Tkey: type, comptime Tval: type, comptime compar
             _ = &self;
         }
 
-        pub fn join(self: *TSelf, other: *const TSelf, comptime updateFn: UpdateFunc) void {
+        pub fn join(self: *TSelf, other: *const TSelf, comptime updateFn: fn (*Tval, *const Tval) void) void {
             for (0..other.count) |i| {
                 self.addOrUpdate(&other.keys[i], &other.values[i], updateFn);
             }
@@ -257,6 +255,133 @@ pub fn SortedArrayMapR(comptime Tkey: type, comptime Tval: type, comptime compar
             }
 
             return u + @intFromBool(cmp == .GreaterThan);
+        }
+    };
+}
+
+pub fn SortedArrayMap(comptime Tkey: type, comptime Tval: type, comptime comparison: compare.Comparison(Tkey)) type {
+    return struct {
+        const TSelf: type = @This();
+        const Tidx: type = std.meta.Int(.unsigned, @bitSizeOf(usize) - @bitSizeOf(compare.CompareResult));
+
+        allocator: std.mem.Allocator,
+        /// Backing array for keys
+        key_buffer: []Tkey,
+        /// Backing array for values
+        val_buffer: []Tval,
+        /// Contained Keys
+        keys: []Tkey,
+        /// Contained Values
+        values: []Tval,
+
+        pub fn init(allocator: std.mem.Allocator) !TSelf {
+            const default_initial_capacity: comptime_int = comptime calc_default_initial_capacity(Tkey, Tval);
+            const result: TSelf = try initWithCapacity(allocator, default_initial_capacity);
+            return result;
+        }
+        pub fn initWithCapacity(allocator: std.mem.Allocator, initial_capacity: usize) !TSelf {
+            const C: usize = @min(@max(2, initial_capacity), comptime (@as(usize, @intCast(std.math.maxInt(Tidx)))));
+            const kbuf: []Tkey = try allocator.alloc(Tkey, C);
+            const vbuf: []Tval = try allocator.alloc(Tval, C);
+            return TSelf{
+                .allocator = allocator,
+                .key_buffer = kbuf,
+                .val_buffer = vbuf,
+                .keys = kbuf[0..0],
+                .values = kbuf[0..0],
+            };
+        }
+        pub fn deinit(self: *TSelf) void {
+            self.allocator.free(self.key_buffer);
+            self.allocator.free(self.val_buffer);
+        }
+
+        pub fn capacity(self: *TSelf) usize {
+            return self.key_buffer.len;
+        }
+
+        /// Add the key/value pair to the set if the key is not already present.
+        /// Returns true if the key/value pair was added
+        pub fn add(self: *TSelf, key: Tkey, val: *const Tval) bool {
+            const insertIdx: InsertionIndex = self.getInsertionIndex(key);
+            switch (insertIdx.compareResult) {
+                .equal => return false,
+                .less => {
+                    self.insert(key, val, insertIdx.index) catch |err| {
+                        log.err("Error when trying to insert key/value {any}/{any} at index {d}: {any}\n{any}", .{ key, val, insertIdx.index, err, @errorReturnTrace() });
+                        return false;
+                    };
+                    return true;
+                },
+                .greater => {
+                    self.insert(key, val, insertIdx.index + 1) catch |err| {
+                        log.err("Error when trying to insert key/value {any}/{any} at index {d}: {any}\n{any}", .{ key, val, insertIdx.index, err, @errorReturnTrace() });
+                        return false;
+                    };
+                    return true;
+                },
+            }
+        }
+
+        const InsertionIndex = packed struct {
+            compareResult: compare.CompareResult,
+            index: Tidx,
+        };
+
+        /// Returns either the index at which the key was found.
+        /// Or the index where the key should be inserted
+        fn getInsertionIndex(self: *TSelf, key: Tkey) InsertionIndex {
+            var L: Tidx = 0;
+            var R: Tidx = self.keys.len - 1;
+            var m: Tidx = undefined;
+            var cmp: compare.CompareResult = undefined;
+
+            binarySearch: while (L <= R) {
+                m = @divFloor((L + R), 2);
+                cmp = comparison(self.keys[m], key);
+                switch (cmp) {
+                    .less => L = m + 1,
+                    .greater => R = m - 1,
+                    .equal => break :binarySearch,
+                }
+            }
+
+            return InsertionIndex{ .compareResult = cmp, .index = m };
+        }
+
+        fn resizeBuffers(self: *TSelf, newsize: usize) !void {
+            std.debug.assert(newsize >= 2);
+            try mem.resize(Tkey, self.allocator, &self.key_buffer, newsize);
+            try mem.resize(Tkey, self.allocator, &self.val_buffer, newsize);
+
+            std.debug.assert(self.key_buffer.len == self.val_buffer.len);
+        }
+        /// Inserts the key/value pair at the specified index
+        fn insert(self: *TSelf, key: Tkey, val: Tval, index: usize) !void {
+            _ = &self;
+            _ = &key;
+            _ = &val;
+            _ = &index;
+            std.debug.panic("Not yet implemented", .{});
+
+            std.debug.assert(index <= self.keys.len);
+            if (self.keys.len >= self.key_buffer.len) try self.resizeBuffers(self.key_buffer.len * 2);
+
+            self.keys.len += 1;
+            self.values.len += 1;
+            if (index < self.keys.len - 1) {
+                var i: usize = self.keys.len - 1;
+
+                // TODO Use a performance optimized mem copy here
+                while (i > index) : (i -= 1) {
+                    self.keys[i] = self.keys[i - 1];
+                    self.values[i] = self.values[i - 1];
+                }
+            }
+
+            std.debug.assert(self.keys.len == self.values.len);
+            self.keys[index] = key;
+            self.values[index] = val;
         }
     };
 }

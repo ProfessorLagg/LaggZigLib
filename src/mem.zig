@@ -3,6 +3,27 @@ const std = @import("std");
 
 const compare = @import("compare.zig");
 
+/// Resizes the slice pointed to by a to newsize.
+/// Does not guarantee not moving pointers.
+/// If newsize < a.len, the highermost indexes are discarded
+pub fn resize(comptime T: type, allocator: std.mem.Allocator, noalias a: *[]T, newsize: usize) !void {
+    if (newsize == 0) {
+        allocator.free(a.*);
+        a.*.len = newsize;
+        return;
+    }
+
+    if (allocator.resize(a.*, newsize)) {
+        a.*.len = newsize;
+        return;
+    }
+
+    const new_a: []T = try allocator.alloc(T, newsize);
+    const L: usize = @min(a.len, newsize);
+    copy(T, new_a[0..L], a.*[0..L]);
+    a.* = new_a;
+}
+
 pub fn allocPanic(allocator: std.mem.Allocator, comptime T: type, n: usize) []T {
     return allocator.alloc(T, n) catch |err| {
         std.debug.panic("Could not alloc due to error: {any} {any}", .{ err, @errorReturnTrace() });
@@ -24,18 +45,15 @@ fn copyBytes_generic(noalias dst: []u8, noalias src: []const u8) void {
     std.debug.assert(dst.len >= src.len);
     for (dst[0..src.len], src) |*d, s| d.* = s;
 }
-
 fn copyBytes_x86_64(noalias dst: []u8, noalias src: []const u8) void {
     comptime if (builtin.cpu.arch != .x86_64) @compileError("This function only works for x86_64 targets. You probably want copyBytes_generic");
 
     @import("intrinsics.zig").x86_x64.repmovsb(dst.ptr, src.ptr, src.len);
 }
-
 const copyBytes: @TypeOf(copyBytes_generic) = switch (builtin.cpu.arch) {
     .x86_64 => copyBytes_x86_64,
     else => copyBytes_generic,
 };
-
 /// Copies all of src into dst starting at index 0
 pub fn copy(comptime T: type, noalias dst: []T, noalias src: []const T) void {
     std.debug.assert(dst.len >= src.len);
@@ -64,13 +82,11 @@ pub fn rotate(comptime T: type, noalias arr: []T, n: usize) void {
     reverse(T, arr[0..n]);
     reverse(T, arr[n..]);
 }
-
 inline fn swapTemp(comptime T: type, a: *T, b: *T) void {
     const tmp: T = a.*;
     a.* = b.*;
     b.* = tmp;
 }
-
 fn swapXorFn(comptime T: type, comptime castTo: type) (fn (comptime type, *T, *T) void) {
     comptime {
         switch (castTo) {
@@ -93,7 +109,6 @@ fn swapXorFn(comptime T: type, comptime castTo: type) (fn (comptime type, *T, *T
         }
     }.swapXor;
 }
-
 /// Swaps values between 2 pointers. Uses XOR swap if possible
 pub fn swap(comptime T: type, a: *T, b: *T) void {
     const swapFn: fn (comptime type, *T, *T) void = comptime blk: {
@@ -112,29 +127,6 @@ pub fn swap(comptime T: type, a: *T, b: *T) void {
     @call(.always_inline, swapFn, .{ T, a, b });
 }
 
-/// Constant time keybased byte swap
-pub fn ctswap(comptime Tk: type, k: Tk, a: []u8, b: []u8) void {
-    comptime if (!@import("types.zig").isUnsignedIntegerType(Tk)) @compileError("Key must be an unsigned integer type");
-    const bitsize = comptime @bitSizeOf(Tk);
-    std.debug.assert(a.len == bitsize);
-    std.debug.assert(b.len == bitsize);
-
-    var ktemp: Tk = k;
-    for (0..bitsize) |i| {
-        const bit: u1 = @truncate(ktemp & 1);
-        const inv: u1 = ~bit;
-
-        const atemp = a[i];
-        const btemp = b[i];
-
-        a[i] = (btemp * bit) + (atemp * inv);
-        b[i] = (atemp * bit) + (btemp * inv);
-
-        ktemp = ktemp >> 1;
-    }
-}
-
-
 pub fn binarySearch(comptime T: type, comptime comparison: compare.Comparison(T), a: []const T, item: T) ?usize {
     var L: usize = 0;
     var R: usize = a.len - 1;
@@ -149,7 +141,6 @@ pub fn binarySearch(comptime T: type, comptime comparison: compare.Comparison(T)
     }
     return null;
 }
-
 pub fn binarySearchR(comptime T: type, comptime comparison: compare.ComparisonR(T), a: []const T, item: *const T) ?usize {
     var L: usize = 0;
     var R: usize = a.len - 1;
