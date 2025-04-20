@@ -135,3 +135,15 @@ pub fn isNumberOrNumberVector(v: anytype) bool {
 pub fn assertIsNumberOrNumberVectorType(comptime T: type) void {
     comptime if (!isNumberOrNumberVector(T)) @compileError("Expected number or vector of numbers, but found: " ++ @typeName(T));
 }
+
+pub fn isFunctionType(comptime T: type) bool {
+    const Ti: std.builtin.Type = @typeInfo(T);
+    return Ti == .@"fn";
+}
+pub fn isFunction(v: anytype) bool {
+    const T: type = @TypeOf(v);
+    return isFunctionType(T);
+}
+pub fn assertIsFunctionType(comptime T: type) void {
+    comptime if (!isFunctionType(T)) @compileError("Expected function, but found: " ++ @typeName(T));
+}

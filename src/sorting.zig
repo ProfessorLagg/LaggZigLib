@@ -123,4 +123,9 @@ inline fn testSortFn(comptime sortFn: @TypeOf(noSort)) !void {
     }
 }
 
-pub const SortedArrayMapR = @import("sortedArrayMap.zig").SortedArrayMapR;
+const sortedArrayMap = @import("sortedArrayMap.zig");
+pub usingnamespace sortedArrayMap;
+
+test "SortedArrayMap" {
+    _ = sortedArrayMap;
+}

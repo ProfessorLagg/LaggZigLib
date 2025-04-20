@@ -2,6 +2,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 const compare = @import("compare.zig");
+const debug = @import("debug.zig");
 
 /// Resizes the slice pointed to by a to newsize.
 /// Does not guarantee not moving pointers.
@@ -42,7 +43,7 @@ pub fn clonePanic(comptime T: type, allocator: std.mem.Allocator, a: []const T) 
 }
 
 fn copyBytes_generic(noalias dst: []u8, noalias src: []const u8) void {
-    std.debug.assert(dst.len >= src.len);
+    debug.assert(dst.len >= src.len);
     for (dst[0..src.len], src) |*d, s| d.* = s;
 }
 fn copyBytes_x86_64(noalias dst: []u8, noalias src: []const u8) void {
@@ -56,7 +57,7 @@ const copyBytes: @TypeOf(copyBytes_generic) = switch (builtin.cpu.arch) {
 };
 /// Copies all of src into dst starting at index 0
 pub fn copy(comptime T: type, noalias dst: []T, noalias src: []const T) void {
-    std.debug.assert(dst.len >= src.len);
+    debug.assert(dst.len >= src.len);
 
     const dst_u8: []u8 = std.mem.sliceAsBytes(dst);
     const src_u8: []const u8 = std.mem.sliceAsBytes(src);

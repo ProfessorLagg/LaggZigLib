@@ -1,6 +1,7 @@
 const std = @import("std");
 const types = @import("types.zig");
 const mem = @import("mem.zig");
+const debug = @import("debug.zig");
 
 pub fn VectorIterator(comptime T: type) type {
     comptime {
@@ -38,7 +39,7 @@ pub fn VectorIterator(comptime T: type) type {
                 self.slice = self.slice[veclen..];
                 return arr;
             } else {
-                std.debug.assert(self.slice.len < veclen);
+                debug.assert(self.slice.len < veclen);
                 mem.copy(T, arr[0..], self.slice);
                 self.slice = self.slice[self.slice.len..];
                 return arr;
