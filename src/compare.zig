@@ -2,7 +2,7 @@ const std = @import("std");
 const types = @import("types.zig");
 const math = @import("math.zig");
 
-pub const CompareResult = enum(i8) { // NO FOLD
+pub const CompareResult = enum(i8) {
     less = -1,
     equal = 0,
     greater = 1,
@@ -53,6 +53,7 @@ fn compareNumberVectorFn(comptime T: type) Comparison(T) {
         }
     }.cmp;
 }
+
 pub fn compareNumberFn(comptime T: type) Comparison(T) {
     types.assertIsNumberType(T);
     return struct {
@@ -79,3 +80,5 @@ pub fn compareNumber(a: anytype, b: anytype) CompareResult {
     };
     return comparison(a, b);
 }
+
+pub fn compareSliceFn(comptime T: type) Comparison([]const T) {}

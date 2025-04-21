@@ -66,14 +66,12 @@ pub fn copy(comptime T: type, noalias dst: []T, noalias src: []const T) void {
 
 /// Reverses the ordering of the items in the slice
 pub fn reverse(comptime T: type, noalias arr: []T) void {
-    var i: usize = arr.len;
-    var j: usize = 0;
-    while (i > j) {
-        const temp = arr[i];
-        arr[i] = arr[j];
-        arr[j] = temp;
-        i -= 1;
-        j += 1;
+    var l: usize = 0;
+    var r: usize = arr.len - @as(usize, @intFromBool(arr.len > 0));
+    while (r > l) {
+        swap(T, &arr[l], &arr[r]);
+        r -= 1;
+        l += 1;
     }
 }
 
