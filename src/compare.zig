@@ -37,7 +37,7 @@ pub fn ComparisonR(comptime T: type) type {
     return fn (*const T, *const T) CompareResult;
 }
 
-fn compareNumberVectorFn(comptime T: type) Comparison(T) {
+pub fn compareNumberVectorFn(comptime T: type) Comparison(T) {
     types.assertIsNumberVectorType(T);
     const vlen: comptime_int = comptime @typeInfo(T).vector.len;
     comptime if (vlen >= std.math.maxInt(i8)) unreachable;
@@ -53,7 +53,6 @@ fn compareNumberVectorFn(comptime T: type) Comparison(T) {
         }
     }.cmp;
 }
-
 pub fn compareNumberFn(comptime T: type) Comparison(T) {
     types.assertIsNumberType(T);
     return struct {
@@ -80,5 +79,3 @@ pub fn compareNumber(a: anytype, b: anytype) CompareResult {
     };
     return comparison(a, b);
 }
-
-pub fn compareSliceFn(comptime T: type) Comparison([]const T) {}
