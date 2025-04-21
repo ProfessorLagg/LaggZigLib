@@ -12,6 +12,7 @@ pub const math2D = @import("math2D.zig");
 pub const mem = @import("mem.zig");
 pub const simd = @import("simd.zig");
 pub const sorting = @import("sorting.zig");
+pub const strings = @import("strings.zig");
 pub const types = @import("types.zig");
 
 test {
@@ -22,6 +23,7 @@ test {
     _ = mem;
     _ = simd;
     _ = sorting;
+    _ = strings;
     _ = types;
 }
 
