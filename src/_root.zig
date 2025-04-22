@@ -13,7 +13,11 @@ pub const math2D = @import("math2D.zig");
 pub const mem = @import("mem.zig");
 pub const simd = @import("simd.zig");
 pub const sorting = @import("sorting.zig");
+<<<<<<< Updated upstream
 pub const strings = @import("strings.zig");
+=======
+pub const time = @import("time.zig");
+>>>>>>> Stashed changes
 pub const types = @import("types.zig");
 
 test {
@@ -25,7 +29,11 @@ test {
     _ = mem;
     _ = simd;
     _ = sorting;
+<<<<<<< Updated upstream
     _ = strings;
+=======
+    _ = time;
+>>>>>>> Stashed changes
     _ = types;
 }
 
