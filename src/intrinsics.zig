@@ -219,6 +219,7 @@ pub const x86_x64 = struct {
 
     /// Returns current TSC
     pub noinline fn rdtsc() u64 {
+        // TODO 32-bit fallback
         return asm volatile ( // NO FOLD
             "rdtsc\n" ++ "shl $32, %rdx\n" ++ "or %rdx, %rax"
             : [ret] "={rax}" (-> u64),

@@ -17,13 +17,32 @@ pub const std_options: std.Options = .{
 };
 
 pub fn main() !void {
-    try test_cpuid();
+    // try test_cpuid();
     // try test_rdtsc();
+    test_timer();
+}
+
+fn test_timer() void {
+    const timer = lib.time.Timer.init();
+
+    const itercount: comptime_int = 9;
+    const stdout = std.io.getStdOut();
+    const writer = stdout.writer();
+
+    var dt_arr: [itercount]u64 = undefined;
+    var t0: u64 = timer.timestamp_ns();
+    for (0..itercount) |i| {
+        const t1: u64 = timer.timestamp_ns();
+        dt_arr[i] = t1 - t0;
+        t0 = t1;
+    }
+    for (dt_arr) |dt| {
+        lib.fmt.formatPanic(writer, "dt = {d}ns\n", .{dt});
+    }
 }
 
 fn test_rdtsc() !void {
     const itercount: comptime_int = 65_356;
-    // const sleep_nanoseconds: comptime_int = std.time.ns_per_ms;
     const stdout = std.io.getStdOut();
     const writer = stdout.writer();
 
