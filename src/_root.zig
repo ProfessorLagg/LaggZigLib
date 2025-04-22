@@ -2,6 +2,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 pub const compare = @import("compare.zig");
+pub const fmt = @import("fmt.zig");
 pub const intrinsics = switch (builtin.cpu.arch) {
     .x86 => @import("intrinsics.zig").x86,
     .x86_64 => @import("intrinsics.zig").x86_x64,
@@ -17,6 +18,7 @@ pub const types = @import("types.zig");
 
 test {
     _ = compare;
+    _ = fmt;
     _ = intrinsics;
     _ = math;
     _ = math2D;

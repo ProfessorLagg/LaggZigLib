@@ -1,7 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
-const laggLibZig = @import("_root.zig");
-const intrinsics = laggLibZig.intrinsics;
+const lib = @import("_root.zig");
+const intrinsics = lib.intrinsics;
 
 pub const std_options: std.Options = .{
     // Set the log level to info to .debug. use the scope levels instead
@@ -17,25 +17,44 @@ pub const std_options: std.Options = .{
 };
 
 pub fn main() !void {
-    const basicLeaves = [_]intrinsics.CPUID.RegisterResult{
-        .{ .eax = 13, .ebx = 1752462657, .ecx = 1145913699, .edx = 1769238117 },
-        .{ .eax = 10620690, .ebx = 34605056, .ecx = 4275581443, .edx = 395049983 },
-        .{ .eax = 0, .ebx = 0, .ecx = 0, .edx = 0 },
-        .{ .eax = 0, .ebx = 0, .ecx = 0, .edx = 0 },
-        .{ .eax = 0, .ebx = 0, .ecx = 0, .edx = 0 },
-        .{ .eax = 0, .ebx = 0, .ecx = 0, .edx = 0 },
-        .{ .eax = 0, .ebx = 0, .ecx = 1, .edx = 0 },
-        .{ .eax = 0, .ebx = 563909545, .ecx = 4195972, .edx = 16 },
-        .{ .eax = 0, .ebx = 0, .ecx = 0, .edx = 0 },
-        .{ .eax = 0, .ebx = 0, .ecx = 0, .edx = 0 },
-        .{ .eax = 0, .ebx = 0, .ecx = 0, .edx = 0 },
-        .{ .eax = 0, .ebx = 0, .ecx = 0, .edx = 0 },
-        .{ .eax = 0, .ebx = 0, .ecx = 0, .edx = 0 },
-    };
-    _ = &basicLeaves;
+    try test_cpuid();
+    // try test_rdtsc();
+}
 
-    test_tsc_via_rdmsr();
-    //try test_repmovsb();
+fn test_rdtsc() !void {
+    const itercount: comptime_int = 65_356;
+    // const sleep_nanoseconds: comptime_int = std.time.ns_per_ms;
+    const stdout = std.io.getStdOut();
+    const writer = stdout.writer();
+
+    var tsc0: u64 = intrinsics.rdtsc();
+    var tsc1: u64 = undefined;
+    for (0..itercount) |i| {
+        tsc1 = intrinsics.rdtsc();
+        const tscD: i128 = @as(i128, @intCast(tsc1)) - @as(i128, @intCast(tsc0));
+        try std.testing.expect(tscD > 0);
+        tsc0 = tsc1;
+        lib.fmt.formatPanic(writer, "tsc {d:5} = {d}\n", .{ i, tsc1 });
+        // std.time.sleep(sleep_nanoseconds);
+    }
+}
+
+fn test_cpuid() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    defer _ = gpa.deinit();
+
+    const stdout = std.io.getStdOut();
+    const writer = stdout.writer();
+
+    const basic_leaves = try lib.intrinsics.CPUID.readAllBasicLeaves(allocator);
+    defer allocator.free(basic_leaves);
+    for (0..basic_leaves.len) |leaf_i| {
+        const leaf = basic_leaves[leaf_i];
+        lib.fmt.formatPanic(writer, "leaf {X:2}H = eax: {x:8}, ebx: {x:8}, ecx: {x:8}, edx: {x:8}\n", .{ leaf_i, leaf.eax, leaf.ebx, leaf.ecx, leaf.edx });
+    }
+
+    lib.fmt.formatPanic(writer, "tsc frequency: {d}  Hz\n", .{lib.intrinsics.CPUID.tscFrequencyHz() orelse 0});
 }
 
 fn test_repmovsb() !void {
@@ -52,7 +71,7 @@ fn test_repmovsb() !void {
     var rand: prng = prng.init(std.testing.random_seed);
     rand.fill(src_page);
 
-    laggLibZig.intrinsics.repmovsb(dst_page.ptr, src_page.ptr, src_page.len);
+    lib.intrinsics.repmovsb(dst_page.ptr, src_page.ptr, src_page.len);
 
     try std.testing.expectEqualSlices(u8, src_page, dst_page);
 }
