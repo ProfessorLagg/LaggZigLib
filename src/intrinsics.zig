@@ -19,6 +19,14 @@ pub const x86 = struct {
         clflushLineSize: u8 = undefined,
         featureFlags: FeatureFlags = undefined,
 
+        // Leaf 15H
+        /// Ratio of TSC frequency to Core Crystal Clock frequency, denominator
+        tscRatioDenominator: u32 = undefined,
+        /// Ratio of TSC frequency to Core Crystal Clock frequency, numerator
+        tscRatioNumerator: u32 = undefined,
+        /// Core Crystal Clock frequency, in units of Hz
+        coreCrystalClockHz: u32 = undefined,
+
         /// Features from Leaf 1 edx and ecx
         pub const FeatureFlags = packed struct {
             // edx
@@ -91,30 +99,26 @@ pub const x86 = struct {
         /// leaf is the value moved into eax before cpuid is called.
         /// ext is the value moved into ecx before cpuid is called
         pub noinline fn readLeafExt(leaf: u32, ext: u32) RegisterResult {
-            var r: RegisterResult = .{};
             nosuspend {
-                _ = asm volatile ( // NO FOLD
-                        "cpuid"
-                        :
-                        : [a] "{eax}" (leaf),
-                          [b] "{ebx}" (0),
-                          [c] "{ecx}" (ext),
-                          [d] "{edx}" (0),
-                    );
-                r.eax = asm volatile ("nop"
+                var r: [4]u32 = [4]u32{ 0, 0, 0, 0 };
+                r[0] = asm volatile ("cpuid"
                     : [ret] "={eax}" (-> u32),
+                    : [a] "{eax}" (leaf),
+                      [b] "{ebx}" (@as(u32, 0)),
+                      [c] "{ecx}" (ext),
+                      [d] "{edx}" (@as(u32, 0)),
                 );
-                r.ebx = asm volatile ("nop"
+                r[1] = asm volatile ("nop"
                     : [ret] "={ebx}" (-> u32),
                 );
-                r.ecx = asm volatile ("nop"
+                r[2] = asm volatile ("nop"
                     : [ret] "={ecx}" (-> u32),
                 );
-                r.edx = asm volatile ("nop"
+                r[3] = asm volatile ("nop"
                     : [ret] "={edx}" (-> u32),
                 );
+                return @bitCast(r);
             }
-            return r;
         }
         /// leaf is the value moved into eax before cpuid is called
         pub noinline fn readLeaf(leaf: u32) RegisterResult {
@@ -148,11 +152,18 @@ pub const x86 = struct {
                     // ebx
                     CPUIDLog.warn("parsing leaf 1 is not fully implemented yet", .{});
                 }
+
+                fn parseLeaf15h(s: *CPUID, r: *RegisterResult) void {
+                    s.tscRatioDenominator = r.eax;
+                    s.tscRatioNumerator = r.ebx;
+                    s.coreCrystalClockHz = r.ecx;
+                }
             };
 
             switch (leaf) {
                 0 => defs.parseLeaf0(self, registers),
                 1 => defs.parseLeaf1(self, registers),
+                0x15 => defs.parseLeaf15h(self, registers),
                 else => CPUIDLog.warn("Leaf {d} not implemented", .{leaf}),
             }
         }
@@ -171,6 +182,7 @@ pub const x86 = struct {
 
             return result;
         }
+
         pub fn readAllBasicLeaves(allocator: std.mem.Allocator) ![]const RegisterResult {
             const r0 = CPUID.readLeaf(0);
             const leaf_count = r0.eax;
@@ -183,15 +195,32 @@ pub const x86 = struct {
             }
             return result;
         }
+
+        /// Tries to read the tsc frequency in Hz from cpuid leaf 0x15 and 0x16
+        pub fn tscFrequencyHz() ?u64 {
+            const leaf_15h = readLeaf(0x15);
+            const leaf_16h = readLeaf(0x16);
+
+            const CPUID_15H_EAX: u64 = leaf_15h.eax;
+            const CPUID_15H_EBX: u64 = leaf_15h.ebx;
+            const CPUID_15H_ECX: u64 = leaf_15h.ecx;
+            const CPUID_16H_EAX: u64 = leaf_16h.eax;
+            if (CPUID_15H_EAX != 0 and CPUID_15H_EBX != 0) {
+                return CPUID_15H_ECX * (CPUID_15H_EBX / CPUID_15H_EAX);
+            } else if (CPUID_15H_ECX == 0 and CPUID_16H_EAX != 0) {
+                return CPUID_16H_EAX * 1_000_000;
+            }
+            return null;
+        }
     };
 };
 pub const x86_x64 = struct {
     pub usingnamespace x86;
 
     /// Returns current TSC
-    pub fn rdtsc() u64 {
+    pub noinline fn rdtsc() u64 {
         return asm volatile ( // NO FOLD
-            "rdtsc\n" ++ "shl $32, %rdx\n" ++ "or %rax, %rdx"
+            "rdtsc\n" ++ "shl $32, %rdx\n" ++ "or %rdx, %rax"
             : [ret] "={rax}" (-> u64),
             :
             : "eax", "rdx", "edx"
@@ -207,9 +236,9 @@ pub const x86_x64 = struct {
     }
 
     /// Returns current TSC. Syncronizes before and after by using mfence and lfence
-    pub fn rdtsc_fenced() u64 {
+    pub noinline fn rdtsc_fenced() u64 {
         return asm volatile ( // NO FOLD
-            "mfence\n" ++ "lfence\n" ++ "rdtsc\n" ++ "lfence\n" ++ "shl $32, %rdx\n" ++ "or %rax, %rdx"
+            "mfence\n" ++ "lfence\n" ++ "rdtsc\n" ++ "lfence\n" ++ "shl $32, %rdx\n" ++ "or %rdx, %rax"
             : [ret] "={rax}" (-> u64),
             :
             : "rax", "eax", "rdx", "edx"
@@ -225,10 +254,10 @@ pub const x86_x64 = struct {
     }
 
     pub const rdtscp_result = struct { tsc: u64, aux: u32 };
-    pub fn rdtscp() rdtscp_result {
+    pub noinline fn rdtscp() rdtscp_result {
         var result: rdtscp_result = .{ .tsc = 0, .aux = comptime std.math.maxInt(u32) };
         nosuspend {
-            result.tsc = asm volatile ("rdtscp\n" ++ "shl $32, %rdx\n" ++ "or %rax, %rdx"
+            result.tsc = asm volatile ("rdtscp\n" ++ "shl $32, %rdx\n" ++ "or %rdx, %rax"
                 : [ret] "={rax}" (-> u64),
                 :
                 : "eax", "rdx", "edx"
@@ -249,10 +278,10 @@ pub const x86_x64 = struct {
     }
 
     /// Returns current TSC. Syncronizes before and after by using lfence
-    pub fn rdtscp_fenced() rdtscp_result {
+    pub noinline fn rdtscp_fenced() rdtscp_result {
         var result: rdtscp_result = .{ .tsc = 0, .aux = comptime std.math.maxInt(u32) };
         nosuspend {
-            result.tsc = asm volatile ("mfence\n" ++ "lfence\n" ++ "rdtscp\n" ++ "lfence\n" ++ "shl $32, %rdx\n" ++ "or %rax, %rdx"
+            result.tsc = asm volatile ("mfence\n" ++ "lfence\n" ++ "rdtscp\n" ++ "lfence\n" ++ "shl $32, %rdx\n" ++ "or %rdx, %rax"
                 : [ret] "={rax}" (-> u64),
                 :
                 : "eax", "rdx", "edx"
