@@ -17,10 +17,12 @@ pub const std_options: std.Options = .{
 };
 
 pub fn main() !void {
-    // try test_cpuid();
+    //try test_cpuid();
+    // _ = lib.intrinsics.CPUID.readParseAll();
     // try test_rdtsc();
     test_timer();
 }
+
 
 fn test_timer() void {
     const timer = lib.time.Timer.init();
@@ -74,6 +76,7 @@ fn test_cpuid() !void {
     }
 
     lib.fmt.formatPanic(writer, "tsc frequency: {d}  Hz\n", .{lib.intrinsics.CPUID.tscFrequencyHz() orelse 0});
+    lib.fmt.formatPanic(writer, "CPUID struct: {any}", .{lib.intrinsics.CPUID.readParseAll()});
 }
 
 fn test_repmovsb() !void {

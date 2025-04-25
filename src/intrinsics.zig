@@ -160,6 +160,7 @@ pub const x86 = struct {
                 }
             };
 
+            CPUIDLog.debug("parsing leaf {X:8}", .{leaf});
             switch (leaf) {
                 0 => defs.parseLeaf0(self, registers),
                 1 => defs.parseLeaf1(self, registers),
@@ -169,7 +170,7 @@ pub const x86 = struct {
         }
         /// Reads all possible information from CPUID
         pub fn readParseAll() CPUID {
-            var result: CPUID = undefined;
+            var result: CPUID = .{};
 
             var leaf = readLeaf(0);
             result.parseLeaf(0, &leaf);
@@ -194,23 +195,6 @@ pub const x86 = struct {
                 result[i] = readLeaf(i);
             }
             return result;
-        }
-
-        /// Tries to read the tsc frequency in Hz from cpuid leaf 0x15 and 0x16
-        pub fn tscFrequencyHz() ?u64 {
-            const leaf_15h = readLeaf(0x15);
-            const leaf_16h = readLeaf(0x16);
-
-            const CPUID_15H_EAX: u64 = leaf_15h.eax;
-            const CPUID_15H_EBX: u64 = leaf_15h.ebx;
-            const CPUID_15H_ECX: u64 = leaf_15h.ecx;
-            const CPUID_16H_EAX: u64 = leaf_16h.eax;
-            if (CPUID_15H_EAX != 0 and CPUID_15H_EBX != 0) {
-                return CPUID_15H_ECX * (CPUID_15H_EBX / CPUID_15H_EAX);
-            } else if (CPUID_15H_ECX == 0 and CPUID_16H_EAX != 0) {
-                return CPUID_16H_EAX * 1_000_000;
-            }
-            return null;
         }
     };
 };
@@ -254,7 +238,7 @@ pub const x86_x64 = struct {
         }
     }
 
-    pub const rdtscp_result = struct { tsc: u64, aux: u32 };
+    pub const rdtscp_result = packed struct { tsc: u64, aux: u32 };
     pub noinline fn rdtscp() rdtscp_result {
         var result: rdtscp_result = .{ .tsc = 0, .aux = comptime std.math.maxInt(u32) };
         nosuspend {

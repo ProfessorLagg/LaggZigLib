@@ -23,7 +23,7 @@ pub const Timer = struct {
     pub fn init() Timer {
         const tscTimer = rdtscTimer.init();
         if (tscTimer != null) {
-            std.log.debug("Using Timer type: {s}", .{@typeName(rdtscTimer)});
+            std.log.debug("Using Timer type: {s}({d} MHz)", .{ @typeName(rdtscTimer), rdtscTimer.tsc_per_s / 1_000_000 });
             return tscTimer.?;
         }
 
@@ -52,13 +52,73 @@ const rdtscTimer = struct {
     var tsc_per_us: u64 = 0;
     var tsc_per_ns: u64 = 0;
 
-    fn getFrequency() ?u64 {
+    /// Tries to read the tsc frequency in Hz from cpuid leaf 0x15 and/or 0x16
+    fn loadTSCFrequency_CPUID() ?u64 {
+        const CPUID = @import("intrinsics.zig").x86.CPUID;
+
+        const leaf_15h = CPUID.readLeaf(0x15);
+        const leaf_16h = CPUID.readLeaf(0x16);
+
+        // Casting the u32 register values to u64
+        // This is done to ensure we can actually sture the full frequency in Hz
+        const CPUID_15H_EAX: u64 = leaf_15h.eax;
+        const CPUID_15H_EBX: u64 = leaf_15h.ebx;
+        const CPUID_15H_ECX: u64 = leaf_15h.ecx;
+        const CPUID_16H_EAX: u64 = leaf_16h.eax;
+
+        if (CPUID_15H_EAX != 0 and CPUID_15H_EBX != 0) {
+            return CPUID_15H_ECX * (CPUID_15H_EBX / CPUID_15H_EAX);
+        } else if (CPUID_15H_ECX == 0 and CPUID_16H_EAX != 0) {
+            return CPUID_16H_EAX * 1_000_000;
+        }
+        return null;
+    }
+    /// Tries to get the TSC frequency from the windows registry
+    fn loadTSCFrequency_windowsRegistry() ?u64 {
+        comptime std.debug.assert(builtin.target.os.tag == .windows);
+
+        // reading key Computer\HKEY_LOCAL_MACHINE\HARDWARE\DESCRIPTION\System\CentralProcessor\0
+        const advapi32 = std.os.windows.advapi32;
+        const LPCWSTR = std.os.windows.LPCWSTR;
+        const DWORD = std.os.windows.DWORD;
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-reggetvaluew
+        const hkey = std.os.windows.HKEY_LOCAL_MACHINE;
+        const lpSubKey: LPCWSTR = std.unicode.utf8ToUtf16LeStringLiteral("HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0");
+        const lpValue: LPCWSTR = std.unicode.utf8ToUtf16LeStringLiteral("~MHz");
+        const dwFlags: DWORD = 0x20000010;
+
+        // const pdwType: ?*DWORD = null;
+        var pvData: [@sizeOf(DWORD)]u8 = undefined;
+        @memset(pvData[0..], 0);
+        var pcbData: DWORD = @sizeOf(@TypeOf(pvData));
+
+        const status = advapi32.RegGetValueW(hkey, lpSubKey, lpValue, dwFlags, null, &pvData, &pcbData);
+        if (status != 0) {
+            std.log.err("returned error status code {d} (0x{X})", .{ status, status });
+            return null;
+        }
+
+        const MHz: DWORD = @as(DWORD, @bitCast(pvData));
+        const Hz: u64 = @as(u64, @intCast(MHz)) * @as(u64, 1_000_000);
+        return Hz;
+    }
+
+    fn loadTSCFrequency() ?u64 {
         if (builtin.target.cpu.arch != .x86_64) return null;
-        return @import("intrinsics.zig").x86_x64.CPUID.tscFrequencyHz();
+        var freq: ?u64 = loadTSCFrequency_CPUID();
+        if (freq != null and freq.? > 0) return freq.?;
+
+        if (builtin.target.os.tag == .windows) {
+            freq = loadTSCFrequency_windowsRegistry();
+            if (freq != null and freq.? > 0) return freq.?;
+        }
+
+        return null;
     }
     /// Attemps to set the tsc_per_xx variables
-    fn tryGetFrequency() bool {
-        tsc_per_s = getFrequency() orelse 0;
+    fn tryLoadTSCFrequency() bool {
+        tsc_per_s = loadTSCFrequency() orelse 0;
         tsc_per_ms = tsc_per_s / std.time.ms_per_s;
         tsc_per_us = tsc_per_s / std.time.us_per_s;
         tsc_per_ns = tsc_per_s / std.time.ns_per_s;
@@ -67,7 +127,7 @@ const rdtscTimer = struct {
 
     pub fn init() ?Timer {
         // TODO Ensure Invariant RDTSC
-        if (tsc_per_s == 0 and (!tryGetFrequency())) return null;
+        if (tsc_per_s == 0 and (!tryLoadTSCFrequency())) return null;
         return Timer{ .vtable = Timer.VTable{
             .timestamp_s = &TSelf._s,
             .timestamp_ms = &TSelf._ms,
