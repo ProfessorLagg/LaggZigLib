@@ -20,27 +20,32 @@ pub fn main() !void {
     //try test_cpuid();
     // _ = lib.intrinsics.CPUID.readParseAll();
     // try test_rdtsc();
-    test_timer();
+    test_TimeSource();
 }
 
-
-fn test_timer() void {
-    const timer = lib.time.Timer.init();
-
-    const itercount: comptime_int = 9;
+fn test_TimeSource() void {
     const stdout = std.io.getStdOut();
     const writer = stdout.writer();
 
-    var dt_arr: [itercount]u64 = undefined;
-    var t0: u64 = timer.timestamp_ns();
-    for (0..itercount) |i| {
-        const t1: u64 = timer.timestamp_ns();
-        dt_arr[i] = t1 - t0;
-        t0 = t1;
+    const lib_timer = lib.time.TimeSource.init();
+    var std_timer = lib.time.startTimerPanic();
+
+    const lib_pre = lib_timer.timestamp_ns();
+    std_timer.reset();
+    for (0..(std.time.ms_per_s / 2)) |_| {
+        std.time.sleep(std.time.ns_per_ms);
     }
-    for (dt_arr) |dt| {
-        lib.fmt.formatPanic(writer, "dt = {d}ns\n", .{dt});
-    }
+    const std_delta = std_timer.read();
+    const lib_post = lib_timer.timestamp_ns();
+    const lib_delta = lib_post - lib_pre;
+
+    const delta_diff: u64 = @max(std_delta, lib_delta) - @min(std_delta, lib_delta);
+    const std_delta_f: f128 = @floatFromInt(std_delta);
+    const lib_delta_f: f128 = @floatFromInt(lib_delta);
+    const delta_diff_rel: f128 = (@max(std_delta_f, lib_delta_f) / @min(std_delta_f, lib_delta_f)) - 1.0;
+    lib.fmt.formatPanic(writer, "lib:  {d} ns\n", .{lib_delta});
+    lib.fmt.formatPanic(writer, "std:  {d} ns\n", .{std_delta});
+    lib.fmt.formatPanic(writer, "diff: {d} ns | {d:.9}%\n", .{ delta_diff, delta_diff_rel * 100.0 });
 }
 
 fn test_rdtsc() !void {

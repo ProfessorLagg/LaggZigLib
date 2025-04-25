@@ -10,7 +10,14 @@ fn stdTimestamp() u64 {
     return @truncate(dt);
 }
 
-pub const Timer = struct {
+pub fn startTimerPanic() std.time.Timer {
+    return std.time.Timer.start() catch |err| {
+        std.log.err("Could not start std.time.Timer due to err: {any}{any}", .{ err, @errorReturnTrace() });
+        @panic("Could not start std.time.Timer");
+    };
+}
+
+pub const TimeSource = struct {
     const VTable = struct {
         timestamp_s: *const fn () u64,
         timestamp_ms: *const fn () u64,
@@ -20,7 +27,7 @@ pub const Timer = struct {
 
     vtable: VTable,
 
-    pub fn init() Timer {
+    pub fn init() TimeSource {
         const tscTimer = rdtscTimer.init();
         if (tscTimer != null) {
             std.log.debug("Using Timer type: {s}({d} MHz)", .{ @typeName(rdtscTimer), rdtscTimer.tsc_per_s / 1_000_000 });
@@ -30,16 +37,16 @@ pub const Timer = struct {
         std.log.debug("Using Timer type: {s}", .{@typeName(stdTimer)});
         return stdTimer.init();
     }
-    pub fn timestamp_s(self: *const Timer) u64 {
+    pub fn timestamp_s(self: *const TimeSource) u64 {
         return self.vtable.timestamp_s();
     }
-    pub fn timestamp_ms(self: *const Timer) u64 {
+    pub fn timestamp_ms(self: *const TimeSource) u64 {
         return self.vtable.timestamp_ms();
     }
-    pub fn timestamp_us(self: *const Timer) u64 {
+    pub fn timestamp_us(self: *const TimeSource) u64 {
         return self.vtable.timestamp_us();
     }
-    pub fn timestamp_ns(self: *const Timer) u64 {
+    pub fn timestamp_ns(self: *const TimeSource) u64 {
         return self.vtable.timestamp_ns();
     }
 };
@@ -48,9 +55,11 @@ const rdtscTimer = struct {
     const TSelf = @This();
     /// How many tsc's happen per second
     var tsc_per_s: u64 = 0;
-    var tsc_per_ms: u64 = 0;
-    var tsc_per_us: u64 = 0;
-    var tsc_per_ns: u64 = 0;
+
+    var tsc_mod_s: f64 = 0;
+    var tsc_mod_ms: f64 = 0;
+    var tsc_mod_us: f64 = 0;
+    var tsc_mod_ns: f64 = 0;
 
     /// Tries to read the tsc frequency in Hz from cpuid leaf 0x15 and/or 0x16
     fn loadTSCFrequency_CPUID() ?u64 {
@@ -119,16 +128,21 @@ const rdtscTimer = struct {
     /// Attemps to set the tsc_per_xx variables
     fn tryLoadTSCFrequency() bool {
         tsc_per_s = loadTSCFrequency() orelse 0;
-        tsc_per_ms = tsc_per_s / std.time.ms_per_s;
-        tsc_per_us = tsc_per_s / std.time.us_per_s;
-        tsc_per_ns = tsc_per_s / std.time.ns_per_s;
+        if (tsc_per_s != 0) {
+            const tsc_per_s_f: f64 = @floatFromInt(tsc_per_s);
+            tsc_mod_s = @as(f64, 1.0) / tsc_per_s_f;
+            tsc_mod_ms = @as(f64, std.time.ms_per_s) / tsc_per_s_f;
+            tsc_mod_us = @as(f64, std.time.us_per_s) / tsc_per_s_f;
+            tsc_mod_ns = @as(f64, std.time.ns_per_s) / tsc_per_s_f;
+        }
+
         return tsc_per_s > 0;
     }
 
-    pub fn init() ?Timer {
+    pub fn init() ?TimeSource {
         // TODO Ensure Invariant RDTSC
         if (tsc_per_s == 0 and (!tryLoadTSCFrequency())) return null;
-        return Timer{ .vtable = Timer.VTable{
+        return TimeSource{ .vtable = TimeSource.VTable{
             .timestamp_s = &TSelf._s,
             .timestamp_ms = &TSelf._ms,
             .timestamp_us = &TSelf._us,
@@ -143,26 +157,34 @@ const rdtscTimer = struct {
 
     fn _s() u64 {
         const tsc = rdtsc_fenced();
-        return tsc / tsc_per_s;
+        const tsc_f: f64 = @floatFromInt(tsc);
+        const res_f: f64 = tsc_f * tsc_mod_s;
+        return @intFromFloat(res_f);
     }
     fn _ms() u64 {
         const tsc = rdtsc_fenced();
-        return tsc / tsc_per_ms;
+        const tsc_f: f64 = @floatFromInt(tsc);
+        const res_f: f64 = tsc_f * tsc_mod_ms;
+        return @intFromFloat(res_f);
     }
     fn _us() u64 {
         const tsc = rdtsc_fenced();
-        return tsc / tsc_per_us;
+        const tsc_f: f64 = @floatFromInt(tsc);
+        const res_f: f64 = tsc_f * tsc_mod_us;
+        return @intFromFloat(res_f);
     }
     fn _ns() u64 {
         const tsc = rdtsc_fenced();
-        return tsc / tsc_per_ns;
+        const tsc_f: f64 = @floatFromInt(tsc);
+        const res_f: f64 = tsc_f * tsc_mod_ns;
+        return @intFromFloat(res_f);
     }
 };
 
 const stdTimer = struct {
     const TSelf = @This();
-    pub fn init() Timer {
-        return Timer{ .vtable = Timer.VTable{
+    pub fn init() TimeSource {
+        return TimeSource{ .vtable = TimeSource.VTable{
             .timestamp_s = TSelf._s,
             .timestamp_ms = TSelf._ms,
             .timestamp_us = TSelf._us,
