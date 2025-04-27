@@ -2,6 +2,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 pub const compare = @import("compare.zig");
+pub const flaggedInts = @import("flaggedInt.zig");
 pub const fmt = @import("fmt.zig");
 pub const intrinsics = switch (builtin.cpu.arch) {
     .x86 => @import("intrinsics.zig").x86,
@@ -18,6 +19,7 @@ pub const types = @import("types.zig");
 
 test {
     _ = compare;
+    _ = flaggedInts;
     _ = fmt;
     _ = intrinsics;
     _ = math;
@@ -27,6 +29,7 @@ test {
     _ = sorting;
     _ = time;
     _ = types;
+
 }
 
 test "Alignment vs Size" {
