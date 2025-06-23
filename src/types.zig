@@ -147,3 +147,20 @@ pub fn isFunction(v: anytype) bool {
 pub fn assertIsFunctionType(comptime T: type) void {
     comptime if (!isFunctionType(T)) @compileError("Expected function, but found: " ++ @typeName(T));
 }
+
+pub fn isPrimitiveType(comptime T: type) bool {
+    comptime {
+        const primitiveTypes = [_]type{ i8, u8, i16, u16, i32, u32, i64, u64, i128, u128, isize, usize, c_char, c_short, c_ushort, c_int, c_uint, c_long, c_ulong, c_longlong, c_ulonglong, c_longdouble, f16, f32, f64, f80, f128, bool, anyopaque, void, noreturn, type, anyerror, comptime_int, comptime_float };
+        for (primitiveTypes) |pT| {
+            if (T == pT) return true;
+        }
+        return false;
+    }
+}
+pub fn isPrimitive(v: anytype) bool {
+    const T: type = @TypeOf(v);
+    return isPrimitiveType(T);
+}
+pub fn assertIsPrimitiveType(comptime T: type) void {
+    comptime if (!isPrimitiveType(T)) @compileError("Expected prmitive, but found: " ++ @typeName(T));
+}
