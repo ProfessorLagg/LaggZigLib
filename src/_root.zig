@@ -40,3 +40,9 @@ test "Alignment vs Size" {
     try std.testing.expectEqual(1, @alignOf(sT));
     try std.testing.expectEqual(1, @sizeOf(sT));
 }
+
+
+const SSO = @import("sso.zig");
+test SSO {
+    _ = SSO;
+}

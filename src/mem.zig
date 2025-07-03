@@ -63,7 +63,6 @@ pub fn copy(comptime T: type, noalias dst: []T, noalias src: []const T) void {
     const src_u8: []const u8 = std.mem.sliceAsBytes(src);
     copyBytes(dst_u8, src_u8);
 }
-
 /// Reverses the ordering of the items in the slice
 pub fn reverse(comptime T: type, noalias arr: []T) void {
     var l: usize = 0;
@@ -74,7 +73,6 @@ pub fn reverse(comptime T: type, noalias arr: []T) void {
         l += 1;
     }
 }
-
 /// Rotates arr by n positions
 pub fn rotate(comptime T: type, noalias arr: []T, n: usize) void {
     reverse(T, arr[0..]);
