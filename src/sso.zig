@@ -124,7 +124,7 @@ test "Size and Alignment" {
 }
 
 test "Length" {
-    var str: String = .{ .heap = .{} };
+    var str: String = .{ .stack = .{} };
     for (0..256) |i| {
         str.stack.len = 0;
         str.heap.len = i;
