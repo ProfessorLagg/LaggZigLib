@@ -30,13 +30,18 @@ const StackString = packed struct {
         };
     }
 
-    fn initCopy(str: []const u8) StackString {
+    fn initClone(str: []const u8) StackString {
         std.debug.assert(str.len <= maxStackLen);
         var r: StackString = .{};
         r.len = @truncate(str.len);
         const slice = r.toSlice();
         @memcpy(slice, str);
         return r;
+    }
+
+    fn deinit(self: *StackString) void {
+        self.len = 0;
+        self.val = 0;
     }
 };
 
@@ -47,6 +52,7 @@ const HeapString = packed struct {
         if (builtin.link_libc) break :b std.heap.c_allocator;
         @compileError("Requires either single-threading to be disabled or lib-c to be linked");
     };
+
     len: usize = 0,
     ptr: [*]u8 = undefined,
 
@@ -67,7 +73,7 @@ const HeapString = packed struct {
         };
     }
 
-    fn initCopy(str: []const u8) !HeapString {
+    fn initClone(str: []const u8) !HeapString {
         const s: []u8 = try staticAllocator.alloc(u8, str.len);
         @memcpy(s[0..], str);
 
@@ -75,6 +81,12 @@ const HeapString = packed struct {
             .len = s.len,
             .ptr = s.ptr,
         };
+    }
+
+    fn initRef(str: []const u8) HeapString {
+        // TODO Support for un-owned heap strings
+        _ = str;
+        @compileError("Not Implemented");
     }
 
     fn deinit(self: *HeapString) void {
@@ -96,16 +108,20 @@ pub const String = packed union {
         return self.stack.len <= maxStackLen;
     }
 
-    pub fn initCopy(str: []const u8) String {
+    pub fn initClone(str: []const u8) String {
         if (str.len <= maxStackLen) {
-            return String{ .stack = StackString.initCopy(str) };
+            return String{ .stack = StackString.initClone(str) };
         } else {
-            return String{ .heap = HeapString.initCopy(str) catch |e| std.debug.panic("{any}{any}", .{ e, @errorReturnTrace() }) };
+            return String{ .heap = HeapString.initClone(str) catch |e| std.debug.panic("{any}{any}", .{ e, @errorReturnTrace() }) };
         }
     }
 
     pub fn deinit(self: *String) void {
-        if (self.isHeapString()) self.heap.deinit();
+        if (self.isHeapString()) {
+            self.heap.deinit();
+        } else {
+            self.stack.deinit();
+        }
     }
 
     pub fn toSlice(self: *String) []u8 {
@@ -169,7 +185,7 @@ pub const String = packed union {
     }
 
     /// compare 2 strings for sorting purposes.
-    /// returns <0 for a < b, 0 for a == b and >0 for a > b
+    /// returns -1 if a < b, 0 if a == b and return 1 for a > b
     pub fn compare(a: *const String, b: *const String) i8 {
         if (@intFromPtr(a) == @intFromPtr(b)) return true;
         const a_len: usize = a.len();
@@ -179,22 +195,22 @@ pub const String = packed union {
         var cmp: i8 = compare_uint(usize, a_len, b_len);
         var i: usize = 0;
         while (cmp == 0 and i < a_len) : (i += 1) cmp = compare_uint(u8, a_slice[i], b_slice[i]);
-        return cmp;
+        return std.math.sign(cmp);
     }
 
-    test initCopy {
+    test initClone {
         var arrStr: [maxStackLen * 2]u8 = undefined;
         const slcL: []u8 = arrStr[0..];
         const slcS: []u8 = arrStr[0 .. maxStackLen - 1];
         @memset(slcL, 'A');
 
-        var str_heap = String.initCopy(slcL);
+        var str_heap = String.initClone(slcL);
         defer str_heap.deinit();
         try std.testing.expect(str_heap.isHeapString());
         try std.testing.expectEqualStrings(slcL, str_heap.toSliceC());
         try std.testing.expectEqualStrings(slcL, str_heap.toSlice());
 
-        var str_stack = String.initCopy(slcS);
+        var str_stack = String.initClone(slcS);
         defer str_stack.deinit();
         try std.testing.expect(str_stack.isStackString());
         try std.testing.expectEqualStrings(slcS, str_stack.toSliceC());
@@ -212,12 +228,12 @@ pub const String = packed union {
         const slcS_B: []u8 = arr_B[0 .. maxStackLen - 1];
         @memset(slcL_B, 'B');
 
-        var str_h_1 = String.initCopy(slcL_A);
-        var str_s_1 = String.initCopy(slcS_A);
-        var str_h_2 = String.initCopy(slcL_B);
-        var str_s_2 = String.initCopy(slcS_B);
-        var str_h_3 = String.initCopy(slcL_A);
-        var str_s_3 = String.initCopy(slcS_A);
+        var str_h_1 = String.initClone(slcL_A);
+        var str_s_1 = String.initClone(slcS_A);
+        var str_h_2 = String.initClone(slcL_B);
+        var str_s_2 = String.initClone(slcS_B);
+        var str_h_3 = String.initClone(slcL_A);
+        var str_s_3 = String.initClone(slcS_A);
         defer str_h_1.deinit();
         defer str_s_1.deinit();
         defer str_h_2.deinit();
@@ -271,6 +287,127 @@ pub const String = packed union {
     }
 };
 
+pub fn SortedStringMap(comptime T: type) type {
+    return struct {
+        const TSelf = @This();
+
+        allocator: std.mem.Allocator,
+
+        key_buffer: []String = undefined,
+        val_buffer: []T = undefined,
+
+        keys: []String = undefined,
+        vals: []T = undefined,
+
+        pub fn init(allocator: std.mem.Allocator) TSelf {
+            var r = TSelf{ .allocator = allocator };
+            r.key_buffer.len = 0;
+            r.val_buffer.len = 0;
+            r.keys.len = 0;
+            r.vals.len = 0;
+        }
+
+        pub fn deinit(self: *TSelf) void {
+            for (self.keys) |*k| k.deinit();
+            self.allocator.free(self.key_buffer);
+            self.allocator.free(self.val_buffer);
+        }
+
+        /// Returns the number of currently stored items
+        pub inline fn len(self: *const TSelf) usize {
+            std.debug.assert(self.keys.len == self.vals.len);
+            return self.keys.len;
+        }
+
+        /// Returns the number of items that can be stored before buffers resize
+        pub inline fn capacity(self: *const TSelf) usize {
+            std.debug.assert(self.key_buffer.len == self.val_buffer.len);
+            return self.key_buffer.len;
+        }
+
+        fn ensureCapacity(self: *TSelf, new_capacity: usize) !void {
+            const old_size = self.capacity();
+            if (old_size >= new_capacity) return;
+
+            const new_size = switch (old_size) {
+                0 => 1,
+                else => std.math.ceilPowerOfTwo(usize, new_capacity),
+            };
+
+            const new_key_buffer: []String = try self.allocator.alloc(String, new_size);
+            const new_val_buffer: []T = try self.allocator.alloc(T, new_size);
+            @memcpy(new_key_buffer[0..self.keys.len], self.keys[0..]);
+            @memcpy(new_val_buffer[0..self.vals.len], self.vals[0..]);
+            self.allocator.free(self.key_buffer);
+            self.allocator.free(self.new_val_buffer);
+            self.key_buffer = new_key_buffer;
+            self.val_buffer = new_val_buffer;
+        }
+
+        fn binarySearch(self: *TSelf, key: *const String) ?usize {
+            var low: usize = 0;
+            var high: usize = self.len();
+            while (low < high) {
+                const mid = low + (high - low) / 2;
+                switch (key.compare(&self.keys[mid])) {
+                    0 => return mid,
+                    1 => low = mid + 1,
+                    -1 => high = mid,
+                    else => unreachable,
+                }
+            }
+            return null;
+        }
+        fn getInsertIndex(self: *TSelf, key: *const String) usize {
+            // TODO Use Binary Search here
+            var i: usize = 0;
+            while (i < self.len()) : (i += 1) {
+                const cmp = key.compare(&self.keys[i]);
+                if (cmp >= 0) break;
+            }
+            return i;
+        }
+
+        pub fn put(self: *TSelf, key: []const u8, val: T) !void {
+            const ptr: *T = try self.findOrInsert(key);
+            ptr.* = val;
+        }
+
+        /// Returns a pointer to the value associated with `key`.
+        /// If `key` is not found in the map, returns null
+        pub fn find(self: *TSelf, key: []const u8) ?*T {
+            const k = String.initClone(key);
+            defer k.deinit();
+            if (self.binarySearch(key)) |i| return &self.vals[i];
+            return null;
+        }
+
+        /// Returns a pointer to the value associated with `key`.
+        /// If `key` is not found in the map, inserts it and returns a pointer to the new value.
+        /// Warning! Incase the buffers need to be resized to fit the new key/value pair, all old key/value pointers are invalidated.
+        pub fn findOrInsert(self: *TSelf, key: []const u8) !*T {
+            const k = String.initClone(key);
+            // TODO only search once!
+            if (self.binarySearch(key)) |i| {
+                k.deinit();
+                return &self.vals[i];
+            } else {
+                try self.ensureCapacity(self.len() + 1);
+                const insert_index = self.getInsertIndex(k);
+                var i: usize = self.len();
+                while (i > insert_index) : (i -= 1) {
+                    self.key_buffer[i] = self.key_buffer[i - 1];
+                    self.val_buffer[i] = self.val_buffer[i - 1];
+                }
+                self.key_buffer[insert_index] = k;
+                self.val_buffer[insert_index] = undefined;
+                self.keys.len += 1;
+                self.vals.len += 1;
+            }
+        }
+    };
+}
+
 test "Size and Alignment" {
     try std.testing.expectEqual(structSize, @sizeOf(StackString));
     try std.testing.expectEqual(structSize, @sizeOf(HeapString));
@@ -299,11 +436,20 @@ test "Length" {
     }
 }
 
+test "std.math.cielPowerOfTwo" {
+    var i: usize = 1;
+    while (i < 65_356) {
+        const next_i: usize = i * 2;
+        try std.testing.expectEqual(next_i, std.math.ceilPowerOfTwo(usize, i + 1));
+        i = next_i;
+    }
+}
+
 test StackString {
     const arrStr = "test";
     const slcStr: []const u8 = arrStr[0..];
 
-    var str: StackString = StackString.initCopy(slcStr);
+    var str: StackString = StackString.initClone(slcStr);
     try std.testing.expectEqualStrings(slcStr, str.toSliceC());
     try std.testing.expectEqualStrings(slcStr, str.toSlice());
 }
@@ -312,7 +458,7 @@ test HeapString {
     const arrStr = "TestTestTest";
     const slcStr: []const u8 = arrStr[0..];
 
-    var str: HeapString = try HeapString.initCopy(slcStr);
+    var str: HeapString = try HeapString.initClone(slcStr);
     defer str.deinit();
     try std.testing.expectEqualStrings(slcStr, str.toSliceC());
     try std.testing.expectEqualStrings(slcStr, str.toSlice());
