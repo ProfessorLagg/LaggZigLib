@@ -187,13 +187,14 @@ pub const String = packed union {
     /// compare 2 strings for sorting purposes.
     /// returns -1 if a < b, 0 if a == b and return 1 for a > b
     pub fn compare(a: *const String, b: *const String) i8 {
-        if (@intFromPtr(a) == @intFromPtr(b)) return true;
+        if (@intFromPtr(a) == @intFromPtr(b)) return 0;
         const a_len: usize = a.len();
         const b_len: usize = b.len();
         const a_slice = a.toSliceC();
         const b_slice = b.toSliceC();
         var cmp: i8 = compare_uint(usize, a_len, b_len);
         var i: usize = 0;
+        
         while (cmp == 0 and i < a_len) : (i += 1) cmp = compare_uint(u8, a_slice[i], b_slice[i]);
         return std.math.sign(cmp);
     }
@@ -303,8 +304,9 @@ pub fn SortedStringMap(comptime T: type) type {
             var r = TSelf{ .allocator = allocator };
             r.key_buffer.len = 0;
             r.val_buffer.len = 0;
-            r.keys.len = 0;
-            r.vals.len = 0;
+            r.keys = r.key_buffer[0..0];
+            r.vals = r.val_buffer[0..0];
+            return r;
         }
 
         pub fn deinit(self: *TSelf) void {
@@ -329,27 +331,36 @@ pub fn SortedStringMap(comptime T: type) type {
             const old_size = self.capacity();
             if (old_size >= new_capacity) return;
 
-            const new_size = switch (old_size) {
-                0 => 1,
-                else => std.math.ceilPowerOfTwo(usize, new_capacity),
-            };
+            if (old_size == 0) {
+                self.key_buffer = try self.allocator.alloc(String, 1);
+                self.val_buffer = try self.allocator.alloc(T, 1);
+                self.keys = self.key_buffer[0..self.keys.len];
+                self.vals = self.val_buffer[0..self.vals.len];
+                try self.ensureCapacity(new_capacity);
+                return;
+            }
 
+            const new_size = try std.math.ceilPowerOfTwo(usize, new_capacity);
             const new_key_buffer: []String = try self.allocator.alloc(String, new_size);
             const new_val_buffer: []T = try self.allocator.alloc(T, new_size);
+
             @memcpy(new_key_buffer[0..self.keys.len], self.keys[0..]);
             @memcpy(new_val_buffer[0..self.vals.len], self.vals[0..]);
             self.allocator.free(self.key_buffer);
-            self.allocator.free(self.new_val_buffer);
+            self.allocator.free(self.val_buffer);
             self.key_buffer = new_key_buffer;
             self.val_buffer = new_val_buffer;
+            self.keys = self.key_buffer[0..self.keys.len];
+            self.vals = self.val_buffer[0..self.vals.len];
         }
 
-        fn binarySearch(self: *TSelf, key: *const String) ?usize {
+        fn binarySearch(self: *const TSelf, key: *const String) ?usize {
             var low: usize = 0;
             var high: usize = self.len();
             while (low < high) {
                 const mid = low + (high - low) / 2;
-                switch (key.compare(&self.keys[mid])) {
+                const cmp = key.compare(&self.key_buffer[mid]);
+                switch (cmp) {
                     0 => return mid,
                     1 => low = mid + 1,
                     -1 => high = mid,
@@ -357,15 +368,6 @@ pub fn SortedStringMap(comptime T: type) type {
                 }
             }
             return null;
-        }
-        fn getInsertIndex(self: *TSelf, key: *const String) usize {
-            // TODO Use Binary Search here
-            var i: usize = 0;
-            while (i < self.len()) : (i += 1) {
-                const cmp = key.compare(&self.keys[i]);
-                if (cmp >= 0) break;
-            }
-            return i;
         }
 
         pub fn put(self: *TSelf, key: []const u8, val: T) !void {
@@ -375,7 +377,7 @@ pub fn SortedStringMap(comptime T: type) type {
 
         /// Returns a pointer to the value associated with `key`.
         /// If `key` is not found in the map, returns null
-        pub fn find(self: *TSelf, key: []const u8) ?*T {
+        pub fn find(self: *const TSelf, key: []const u8) ?*T {
             const k = String.initClone(key);
             defer k.deinit();
             if (self.binarySearch(key)) |i| return &self.vals[i];
@@ -386,23 +388,83 @@ pub fn SortedStringMap(comptime T: type) type {
         /// If `key` is not found in the map, inserts it and returns a pointer to the new value.
         /// Warning! Incase the buffers need to be resized to fit the new key/value pair, all old key/value pointers are invalidated.
         pub fn findOrInsert(self: *TSelf, key: []const u8) !*T {
-            const k = String.initClone(key);
-            // TODO only search once!
-            if (self.binarySearch(key)) |i| {
-                k.deinit();
-                return &self.vals[i];
-            } else {
-                try self.ensureCapacity(self.len() + 1);
-                const insert_index = self.getInsertIndex(k);
-                var i: usize = self.len();
-                while (i > insert_index) : (i -= 1) {
-                    self.key_buffer[i] = self.key_buffer[i - 1];
-                    self.val_buffer[i] = self.val_buffer[i - 1];
+            var k = String.initClone(key);
+
+            if (self.len() == 0) {
+                try self.ensureCapacity(1);
+                self.key_buffer[0] = k;
+                self.val_buffer[0] = undefined;
+                self.keys = self.key_buffer[0..1];
+                self.vals = self.val_buffer[0..1];
+                return &self.vals[0];
+            }
+
+            var low: usize = 0;
+            var high: usize = self.len();
+            var mid: usize = undefined;
+            var cmp: i8 = undefined;
+            while (low < high) {
+                mid = low + (high - low) / 2;
+                cmp = k.compare(&self.keys[mid]);
+                switch (cmp) {
+                    0 => {
+                        // Key was found
+                        k.deinit();
+                        return &self.vals[mid];
+                    },
+                    1 => low = mid + 1,
+                    -1 => high = mid,
+                    else => unreachable,
                 }
-                self.key_buffer[insert_index] = k;
-                self.val_buffer[insert_index] = undefined;
-                self.keys.len += 1;
-                self.vals.len += 1;
+            }
+
+            // Key was not found
+            cmp = std.math.sign(cmp); // TODO Figure out how this can end up NOT being -1 or 1
+            const old_len = self.len();
+            try self.ensureCapacity(old_len + 1);
+            if (cmp == -1) {
+                while (cmp < 0 and mid > 0) {
+                    mid -= 1;
+                    cmp = k.compare(&self.keys[mid]);
+                }
+            } else if (cmp == 1) {
+                while (cmp > 0 and mid < old_len - 1) {
+                    mid += 1;
+                    cmp = k.compare(&self.keys[mid]);
+                }
+            } else {
+                std.log.debug("Expected 1 or -1, but found {d}", .{cmp});
+                unreachable;
+            }
+
+            var i: usize = old_len;
+            while (i > mid) : (i -= 1) {
+                self.key_buffer[i] = self.key_buffer[i - 1];
+                self.val_buffer[i] = self.val_buffer[i - 1];
+            }
+            self.key_buffer[mid] = k;
+            self.val_buffer[mid] = undefined;
+            self.keys.len += 1;
+            self.vals.len += 1;
+            return &self.vals[mid];
+        }
+
+        test put {
+            // TODO Test that all the inserted values are actually in the map and in the correct positions
+
+            var ssm: TSelf = TSelf.init(std.testing.allocator);
+            defer ssm.deinit();
+
+            var prng = std.Random.DefaultPrng.init(2025_07_06);
+            var val: T = undefined;
+            const valbuf: []u8 = std.mem.asBytes(&val);
+
+            inline for (0..101) |i| {
+                @memset(valbuf, 0);
+                prng.fill(valbuf);
+                const keystr: []const u8 = try std.fmt.allocPrint(std.testing.allocator, "k{d}", .{i});
+                try ssm.put(keystr, val);
+                std.testing.allocator.free(keystr);
             }
         }
     };
@@ -466,4 +528,24 @@ test HeapString {
 
 test String {
     _ = String;
+}
+
+test SortedStringMap {
+    _ = SortedStringMap(usize);
+    _ = SortedStringMap(u8);
+    _ = SortedStringMap(u64);
+    _ = SortedStringMap(u32);
+    _ = SortedStringMap(u16);
+    _ = SortedStringMap(u128);
+    _ = SortedStringMap(isize);
+    _ = SortedStringMap(i8);
+    _ = SortedStringMap(i64);
+    _ = SortedStringMap(i32);
+    _ = SortedStringMap(i16);
+    _ = SortedStringMap(i128);
+    _ = SortedStringMap(f80);
+    _ = SortedStringMap(f64);
+    _ = SortedStringMap(f32);
+    _ = SortedStringMap(f16);
+    _ = SortedStringMap(f128);
 }
