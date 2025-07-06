@@ -327,7 +327,7 @@ pub fn SortedStringMap(comptime T: type) type {
             return self.key_buffer.len;
         }
 
-        fn ensureCapacity(self: *TSelf, new_capacity: usize) !void {
+        fn ensureCapacity_old(self: *TSelf, new_capacity: usize) !void {
             const old_size = self.capacity();
             if (old_size >= new_capacity) return;
 
@@ -350,6 +350,27 @@ pub fn SortedStringMap(comptime T: type) type {
             self.allocator.free(self.val_buffer);
             self.key_buffer = new_key_buffer;
             self.val_buffer = new_val_buffer;
+            self.keys = self.key_buffer[0..self.keys.len];
+            self.vals = self.val_buffer[0..self.vals.len];
+        }
+
+        fn ensureCapacity(self: *TSelf, new_capacity: usize) !void {
+            const old_size = self.capacity();
+            if (old_size >= new_capacity) return;
+
+            if (old_size == 0) {
+                self.key_buffer = try self.allocator.alloc(String, 1);
+                self.val_buffer = try self.allocator.alloc(T, 1);
+                self.keys = self.key_buffer[0..self.keys.len];
+                self.vals = self.val_buffer[0..self.vals.len];
+                try self.ensureCapacity(new_capacity);
+                return;
+            }
+
+            const new_size = try std.math.ceilPowerOfTwo(usize, new_capacity);
+
+            if (self.allocator.resize(self.key_buffer, new_size)) self.key_buffer.len = new_size else self.key_buffer = try self.allocator.realloc(self.key_buffer, new_size);
+            if (self.allocator.resize(self.val_buffer, new_size)) self.val_buffer.len = new_size else self.val_buffer = try self.allocator.realloc(self.val_buffer, new_size);
             self.keys = self.key_buffer[0..self.keys.len];
             self.vals = self.val_buffer[0..self.vals.len];
         }
