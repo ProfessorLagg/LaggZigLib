@@ -194,7 +194,7 @@ pub const String = packed union {
         const b_slice = b.toSliceC();
         var cmp: i8 = compare_uint(usize, a_len, b_len);
         var i: usize = 0;
-        
+
         while (cmp == 0 and i < a_len) : (i += 1) cmp = compare_uint(u8, a_slice[i], b_slice[i]);
         return std.math.sign(cmp);
     }
@@ -390,7 +390,8 @@ pub fn SortedStringMap(comptime T: type) type {
         pub fn findOrInsert(self: *TSelf, key: []const u8) !*T {
             var k = String.initClone(key);
 
-            if (self.len() == 0) {
+            const old_len = self.len();
+            if (old_len == 0) {
                 try self.ensureCapacity(1);
                 self.key_buffer[0] = k;
                 self.val_buffer[0] = undefined;
@@ -400,7 +401,7 @@ pub fn SortedStringMap(comptime T: type) type {
             }
 
             var low: usize = 0;
-            var high: usize = self.len();
+            var high: usize = old_len;
             var mid: usize = undefined;
             var cmp: i8 = undefined;
             while (low < high) {
@@ -419,8 +420,6 @@ pub fn SortedStringMap(comptime T: type) type {
             }
 
             // Key was not found
-            cmp = std.math.sign(cmp); // TODO Figure out how this can end up NOT being -1 or 1
-            const old_len = self.len();
             try self.ensureCapacity(old_len + 1);
             if (cmp == -1) {
                 while (cmp < 0 and mid > 0) {
@@ -548,4 +547,6 @@ test SortedStringMap {
     _ = SortedStringMap(f32);
     _ = SortedStringMap(f16);
     _ = SortedStringMap(f128);
+    _ = SortedStringMap(@Vector(70, f32));
+    _ = SortedStringMap(struct { sum: u32 = 0, count: u32 = 0 });
 }
