@@ -42,7 +42,7 @@ test "Alignment vs Size" {
 }
 
 
-pub const SSO = @import("sso.zig");
-test SSO {
-    _ = SSO;
+pub const sso = @import("sso.zig");
+test sso {
+    _ = sso;
 }
