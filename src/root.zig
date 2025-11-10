@@ -2,20 +2,17 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 pub const compare = @import("compare.zig");
+
 pub const flaggedInts = @import("flaggedInt.zig");
 pub const fmt = @import("fmt.zig");
-pub const intrinsics = switch (builtin.cpu.arch) {
-    .x86 => @import("intrinsics.zig").x86,
-    .x86_64 => @import("intrinsics.zig").x86_x64,
-    else => struct {},
-};
+pub const intrinsics = @import("intrinsics.zig");
 pub const math = @import("math.zig");
-pub const math2D = @import("math2D.zig");
 pub const mem = @import("mem.zig");
 pub const simd = @import("simd.zig");
 pub const sorting = @import("sorting.zig");
 pub const time = @import("time.zig");
 pub const types = @import("types.zig");
+pub const sso = @import("sso.zig");
 
 test {
     _ = compare;
@@ -23,26 +20,10 @@ test {
     _ = fmt;
     _ = intrinsics;
     _ = math;
-    _ = math2D;
     _ = mem;
     _ = simd;
     _ = sorting;
     _ = time;
     _ = types;
-
-}
-
-test "Alignment vs Size" {
-    const sT = struct {
-        data1: bool = true,
-    };
-
-    try std.testing.expectEqual(1, @alignOf(sT));
-    try std.testing.expectEqual(1, @sizeOf(sT));
-}
-
-
-pub const sso = @import("sso.zig");
-test sso {
     _ = sso;
 }

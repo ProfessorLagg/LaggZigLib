@@ -92,8 +92,10 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
-    //const exe_asm = b.addInstallBinFile(exe.getEmittedAsm(), "exe.s");
-    //b.getInstallStep().dependOn(&exe_asm.step);
+    const lib_asm = b.addInstallBinFile(lib.getEmittedAsm(), "lib.s");
+    const exe_asm = b.addInstallBinFile(exe.getEmittedAsm(), "exe.s");
+    b.getInstallStep().dependOn(&exe_asm.step);
+    b.getInstallStep().dependOn(&lib_asm.step);
 
     // === Steps ===
     // --- Run ---
@@ -105,7 +107,7 @@ pub fn build(b: *std.Build) void {
 
     // --- Test ---
     const lib_unit_tests = b.addTest(.{
-        .test_runner = .{ .path = b.path("src/test_runner.zig"), .mode = .simple },
+        .test_runner = .{ .path = b.path("src/test_runner.zig"), .mode = .simple},
         .root_module = lib_mod,
     });
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);

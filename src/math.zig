@@ -92,7 +92,3 @@ pub fn sum(comptime T: type, a: []const T) T {
 
     return sumFn(a);
 }
-
-test "map" {
-    // TODO
-}

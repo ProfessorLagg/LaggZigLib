@@ -494,9 +494,6 @@ test "Size and Alignment" {
     try std.testing.expectEqual(structSize, @sizeOf(StackString));
     try std.testing.expectEqual(structSize, @sizeOf(HeapString));
     try std.testing.expectEqual(@alignOf(StackString), @alignOf(HeapString));
-    std.log.debug("{s} | size: {d}, align: {d}", .{ @typeName(StackString), @sizeOf(StackString), @alignOf(StackString) });
-    std.log.debug("{s} | size: {d}, align: {d}", .{ @typeName(HeapString), @sizeOf(HeapString), @alignOf(HeapString) });
-    std.log.debug("{s} | size: {d}, align: {d}", .{ @typeName(String), @sizeOf(String), @alignOf(String) });
 }
 
 test "Length" {
