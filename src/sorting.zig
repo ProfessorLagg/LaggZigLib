@@ -59,7 +59,7 @@ pub fn insertionSortR(comptime T: type, comptime comparison: compare.ComparisonR
         a[j] = x;
     }
 }
-test "insertionSort" {
+test insertionSort {
     try testSortFn(insertionSort);
 }
 
@@ -89,7 +89,7 @@ pub fn bubbleSortR(comptime T: type, comptime comparison: compare.ComparisonR(T)
         n = next_n;
     }
 }
-test "bubbleSort" {
+test bubbleSort {
     try testSortFn(bubbleSort);
 }
 
