@@ -122,10 +122,3 @@ inline fn testSortFn(comptime sortFn: @TypeOf(noSort)) !void {
         };
     }
 }
-
-const sortedArrayMap = @import("sortedArrayMap.zig");
-pub usingnamespace sortedArrayMap;
-
-test "SortedArrayMap" {
-    _ = sortedArrayMap;
-}

@@ -199,8 +199,6 @@ pub const x86 = struct {
     };
 };
 pub const x86_x64 = struct {
-    pub usingnamespace x86;
-
     /// Returns current TSC
     pub noinline fn rdtsc() u64 {
         // TODO 32-bit fallback
@@ -208,13 +206,13 @@ pub const x86_x64 = struct {
             "rdtsc\n" ++ "shl $32, %rdx\n" ++ "or %rdx, %rax"
             : [ret] "={rax}" (-> u64),
             :
-            : "eax", "rdx", "edx"
+            : .{ .eax = true, .rdx = true, .edx = true }
         );
     }
     test "rdtsc" {
         for (0..1000) |i| {
             const tsc0 = rdtsc();
-            std.time.sleep(i);
+            std.Thread.sleep(i);
             const tsc1 = rdtsc();
             try std.testing.expect(tsc0 < tsc1);
         }
@@ -226,13 +224,13 @@ pub const x86_x64 = struct {
             "mfence\n" ++ "lfence\n" ++ "rdtsc\n" ++ "lfence\n" ++ "shl $32, %rdx\n" ++ "or %rdx, %rax"
             : [ret] "={rax}" (-> u64),
             :
-            : "rax", "eax", "rdx", "edx"
+            : .{ .rax = true, .eax = true, .rdx = true, .edx = true }
         );
     }
     test "rdtsc_fenced" {
         for (0..1000) |i| {
             const tsc0 = rdtsc_fenced();
-            std.time.sleep(i);
+            std.Thread.sleep(i);
             const tsc1 = rdtsc_fenced();
             try std.testing.expect(tsc0 < tsc1);
         }
@@ -245,7 +243,7 @@ pub const x86_x64 = struct {
             result.tsc = asm volatile ("rdtscp\n" ++ "shl $32, %rdx\n" ++ "or %rdx, %rax"
                 : [ret] "={rax}" (-> u64),
                 :
-                : "eax", "rdx", "edx"
+                : .{ .eax = true, .rdx = true, .edx = true }
             );
             result.aux = asm volatile ("nop"
                 : [ret] "={ecx}" (-> u32),
@@ -256,7 +254,7 @@ pub const x86_x64 = struct {
     test "rdtscp" {
         for (0..1000) |i| {
             const tscp0 = rdtscp();
-            std.time.sleep(i);
+            std.Thread.sleep(i);
             const tscp1 = rdtscp();
             try std.testing.expect(tscp0.tsc < tscp1.tsc);
         }
@@ -269,7 +267,7 @@ pub const x86_x64 = struct {
             result.tsc = asm volatile ("mfence\n" ++ "lfence\n" ++ "rdtscp\n" ++ "lfence\n" ++ "shl $32, %rdx\n" ++ "or %rdx, %rax"
                 : [ret] "={rax}" (-> u64),
                 :
-                : "eax", "rdx", "edx"
+                : .{ .eax = true, .rdx = true, .edx = true }
             );
             result.aux = asm volatile ("nop"
                 : [ret] "={ecx}" (-> u32),
@@ -280,7 +278,7 @@ pub const x86_x64 = struct {
     test "rdtscp_fenced" {
         for (0..1000) |i| {
             const tscp0 = rdtscp_fenced();
-            std.time.sleep(i);
+            std.Thread.sleep(i);
             const tscp1 = rdtscp_fenced();
             try std.testing.expect(tscp0.tsc < tscp1.tsc);
         }

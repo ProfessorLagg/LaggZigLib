@@ -1,12 +1,16 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const ansi_esc = "\x1b[";
-const ansi_text_reset = ansi_esc ++ "0m";
-const ansi_text_fail = ansi_esc ++ "1;31m";
-const ansi_text_pass = ansi_esc ++ "1;32m";
+const _esc = "\x1b[";
+const _text_reset = _esc ++ "0m";
+const _text_test = _esc ++ "1;33m";
+const _text_fail = _esc ++ "1;31m";
+const _text_pass = _esc ++ "1;32m";
+const _move_up_1 = _esc ++ "A";
 pub fn main() !void {
-    const out = std.io.getStdOut().writer();
+    var out_buffer: [4096]u8 = undefined;
+    var out_writer = std.fs.File.stdout().writer(&out_buffer);
+    const out = &out_writer.interface;
 
     var count_test: usize = 0;
     var count_pass: usize = 0;
@@ -15,23 +19,25 @@ pub fn main() !void {
     for (builtin.test_functions) |t| {
         count_test += 1;
         t.func() catch |err| {
-            const trace = @errorReturnTrace();
-            if (trace != null) {
-                try std.fmt.format(out, "{}{s}FAIL{s}\t{s}\n", .{ trace.?, ansi_text_fail, ansi_text_reset, t.name });
-            } else {
-                try std.fmt.format(out, "{}\n{s}FAIL{s}\t{s}\n", .{ err, ansi_text_fail, ansi_text_reset, t.name });
-            }
-            count_fail += 1;
+            try forcePrint(out, _text_fail ++ "FAIL\t" ++ _text_reset ++ "{s}\n", .{t.name});
 
+            try forcePrint(out, "{any}\n{any}\n", .{ err, @errorReturnTrace() });
+            count_fail += 1;
             continue;
         };
-        try std.fmt.format(out, "{s}PASS{s}\t{s}\n", .{ ansi_text_pass, ansi_text_reset, t.name });
+        try forcePrint(out, _text_pass ++ "PASS\t" ++ _text_reset ++ "{s}\n", .{t.name});
         count_pass += 1;
     }
 
-    try std.fmt.format(out, "\n=== SUMMARY ===\n", .{});
-    try std.fmt.format(out, "{s}PASSED{s}\t{d}/{d}\n", .{ ansi_text_pass, ansi_text_reset, count_pass, count_test });
-    if (count_fail > 0) try std.fmt.format(out, "{s}FAILED{s}\t{d}/{d}\n", .{ ansi_text_fail, ansi_text_reset, count_fail, count_test });
+    try forcePrint(out, "\n=== SUMMARY ===\n", .{});
+    try forcePrint(out, "{s}PASSED{s}\t{d}/{d}\n", .{ _text_pass, _text_reset, count_pass, count_test });
+    if (count_fail > 0) try forcePrint(out, "{s}FAILED{s}\t{d}/{d}\n", .{ _text_fail, _text_reset, count_fail, count_test });
+}
+
+fn forcePrint(w: *std.io.Writer, comptime fmt: []const u8, args: anytype) !void {
+    try w.flush();
+    try w.print(fmt, args);
+    try w.flush();
 }
 
 fn setCursorLineStart(writer: anytype) !void {
